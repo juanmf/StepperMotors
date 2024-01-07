@@ -3,7 +3,7 @@ import queue
 from AccelerationStrategy import AccelerationStrategy
 from StepperMotor import StepperMotor
 from BlockingQueueWorker import BlockingQueueWorker
-import RPi.GPIO as GPIO
+from RPi import GPIO
 import pigpio
 import time
 

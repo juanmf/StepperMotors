@@ -1,6 +1,6 @@
 from AccelerationStrategy import (LinearAcceleration, AccelerationStrategy, ExponentialAcceleration,
-                                                CustomAccelerationPerPps, DynamicDelayPlanner, StaticDelayPlanner,
-                                                InteractiveAcceleration, DelayPlanner)
+                                  CustomAccelerationPerPps, DynamicDelayPlanner, StaticDelayPlanner,
+                                  InteractiveAcceleration, DelayPlanner)
 from Controller import DRV8825MotorDriver
 from Navigation import DynamicNavigation, StaticNavigation, Navigation
 

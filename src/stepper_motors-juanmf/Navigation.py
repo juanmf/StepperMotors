@@ -1,6 +1,6 @@
 # Static or responsive/dynamic navigation implementations.
 from myMath import cmp
-import RPi.GPIO as GPIO
+from RPi import GPIO
 
 
 class Navigation:

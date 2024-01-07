@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "sshkeyboard", "RPi.GPIO", "pigpio", "numpy"]
 build-backend = "hatchling.build"
 
 [project]
