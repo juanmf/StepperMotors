@@ -17,6 +17,9 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
 ]
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/stepper_motors-juanmf1"]
+
 [project.urls]
 Homepage = "https://github.com/juanmf/StepperMotors"
 Issues = "https://github.com/juanmf/StepperMotors/issues"
