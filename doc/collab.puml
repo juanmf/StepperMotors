@@ -1,0 +1,128 @@
+@startuml
+class UsesSingleThreadedExecutor
+class ThreadPoolExecutorStackTraced
+
+class ControllerFactory {
+    getLinearDRV8825With(stepperMotor, directionPin, StepPin):
+    getExponentialDRV8825With(stepperMotor, directionPin, StepPin):
+    getTwoStageExponentialDRV8825With(stepperMotor, directionPin, StepPin):
+    getCustomTorqueCharacteristicsDRV8825With(stepperMotor, directionPin, StepPin):
+}
+class StaticControllerFactory
+class DynamicControllerFactory
+
+class Navigation
+class StaticNavigation
+class DynamicNavigation
+
+class Benchmark{
+findMinPps()
+findMaxPps()
+findTransformations() // Max Accelerations
+}
+
+class BipolarStepperMotorDriver
+class DRV8825MotorDriver
+
+class StepperMotor
+class PG35S_D48_HHC2
+class GenericStepper
+
+class AccelerationStrategy {
+    decreaseSleepTime()
+    increaseSleepTime()
+    computeSleepTimeUs()
+    done()
+    shouldBreak()
+    canStop()
+    isRightDirection()
+}
+
+class LinearAcceleration
+class ExponentialAcceleration
+class CustomAccelerationPerPps
+class InteractiveAcceleration{
+setSpeedDelta()
+speedUp()
+}
+
+class DelayPlanner {
+    computeDelay()
+    done()
+}
+
+class StaticDelayPlanner
+class DynamicDelayPlanner
+class State {
+    effectSpeed()
+}
+
+''' structure
+ThreadPoolExecutorStackTraced --|> ThreadPoolExecutor
+UsesSingleThreadedExecutor --|> ThreadPoolExecutorStackTraced
+
+BipolarStepperMotorDriver ---|> UsesSingleThreadedExecutor
+
+PG35S_D48_HHC2 -up-|> StepperMotor
+GenericStepper -up-|> StepperMotor
+
+StaticControllerFactory -left-|> ControllerFactory
+DynamicControllerFactory -left-|> ControllerFactory
+
+DRV8825MotorDriver -up-|> BipolarStepperMotorDriver
+
+StaticDelayPlanner -down-|> DelayPlanner
+DynamicDelayPlanner -up-|> DelayPlanner
+DynamicDelayPlanner +-- State
+
+Rest -up--|> State
+RampingUp -up-|> State
+RampingDown -up--|> State
+Steady -up-|> State
+
+StaticNavigation -down-|> Navigation
+DynamicNavigation -up-|> Navigation
+
+LinearAcceleration ---|> AccelerationStrategy
+ExponentialAcceleration --|> AccelerationStrategy
+CustomAccelerationPerPps --|> AccelerationStrategy
+InteractiveAcceleration ---|> AccelerationStrategy
+
+''' Relations
+BipolarStepperMotorDriver -left-> Navigation
+BipolarStepperMotorDriver -up-> AccelerationStrategy
+BipolarStepperMotorDriver -right-> StepperMotor
+
+Navigation .right.> AccelerationStrategy
+AccelerationStrategy --> DelayPlanner
+
+State ..> AccelerationStrategy : decreaseSleepTime()/\n increaseSleepTime()
+
+Benchmark ..> InteractiveAcceleration
+
+StaticControllerFactory .right.> StaticDelayPlanner
+StaticControllerFactory .right.> StaticNavigation
+
+DynamicControllerFactory .right.> DynamicDelayPlanner
+DynamicControllerFactory .right.> DynamicNavigation
+
+''' Notes
+note as N1
+Benchmark output can be added
+to StepperMotor.TORQUE_CHARACTERISTICS
+so that CustomAccelerationPerPps optimizes
+motor acceleration at runtime.
+end note
+
+note as N2
+DynamicNavigation & DynamicDelayPlanner
+can respond to sudden and unexpected changes
+in direction or destination.
+end note
+
+N1 .. Benchmark
+N1 .. CustomAccelerationPerPps
+
+N2 .. DynamicControllerFactory
+@enduml
+
