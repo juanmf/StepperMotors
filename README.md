@@ -1,6 +1,37 @@
-# Add main section
+# Intro
+
+Although Python and PC in general (RPI in particular) are not optimal for accurate timing of stepper motor pulses
+(SO scheduler + Python sleep inaccuracies and, ATM, Global Interpreter Lock [GIL]), this library aims at providing
+a versatile tool for managing a set of stepper motors (through their drivers) in several ways that might fit specific 
+scenarios.
+
+A few distinct concepts have been implemented; see [doc/collab.png](./doc/collab.png):
+* Driver (or Controller, used interchangeably), each instantiated driver will behave as a dedicated single thread worker
+  (see `BlockingQueueWorker`) which receives steps jobs through a shared queue, in an attempt decouple steps timing 
+  from the rest of the system, (here the GIL imposes some challenged in theory).
+* Stepper Motor, encapsulates the motor characteristics, like min and max PPS (pulses per second), and instantaneous  
+  torque. A Generic motor is implemented that can be constructed with specifics in case of lacking implementation of  
+  your motor (you are welcome to add it).
+* Navigation, The driver can navigate from A to B, setting direction & sending pulses to the motor, statically (as in 
+  a 3D printer scenario where planning is made up front) or dynamically (for interactive or event based systems that
+  need to quickly respond to unplanned speed and direction changes).
+* Acceleration strategies or profiles, handle how to reach max speeds for the motor. Linear, Exponential & Custom (which
+  takes motor's instantaneous torque or a list of transformations as input to max out your motor capabilities). Custom
+  acceleration strategy has a pre-requisite that you use the Benchmark module (see bellow) to find optimal  
+  transformations for your motor, in a production setup (proper load applied). All changes are effected as a function of
+  current motor' speed in PPS. (other systems use curves as function of time. I found that impractical)
+  * DelayPlanners (in tandem with Navigation modes) enable Drivers to handle inertia gracefully either in a static or 
+    dynamic context. DelayPlanner implementations determine if it's time to start breaking, speeding up or stay steady.
+    Acceleration strategies effect proper changes to speed. 
+* Benchmark, a stress test module to find your motor's (under current load), min & max speeds, and instantaneous torque 
+  characteristics, all in terms of PPS. For instantaneous torque characteristics the output (with format
+  `[(minPPS, incrementPPS_1), (minPPS + incrementPPS_1, incrementPPS_2), ..., (maxPPS, 0)]`) can be
+  used as `YourStepperMotorSubClass.TORQUE_CHARACTERISTICS` or as an input to `CustomAccelerationPerPps` acceleration 
+  strategy's `transformations` constructor argument. This enables yor motor to reach max speed in the least amount of 
+  steps possible while keeping synch (useful when speed matters).
 
 ## Install
+
 `pip install -i https://test.pypi.org/simple/ stepper-motors-juanmf1==0.0.2`
 
 ## Usage
