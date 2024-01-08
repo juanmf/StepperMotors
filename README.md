@@ -29,6 +29,11 @@ A few distinct concepts have been implemented:
   used as `YourStepperMotorSubClass.TORQUE_CHARACTERISTICS` or as an input to `CustomAccelerationPerPps` acceleration 
   strategy's `transformations` constructor argument. This enables yor motor to reach max speed in the least amount of 
   steps possible while keeping synch (useful when speed matters).
+  * Currently tested on (see https://www.reddit.com/r/robotics/comments/18ukw4p/benchmarking_stepper_motor/):  
+    * Raspberry Pi 4B with,
+    * DRV8825 driver board
+    * PG35S_D48_HHC2 stepper motor 
+ 
 
 ![doc/collab.png](./doc/collab.png):
 
