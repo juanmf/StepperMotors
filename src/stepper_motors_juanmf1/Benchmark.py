@@ -4,11 +4,10 @@ import time
 import sys
 from sshkeyboard import listen_keyboard, stop_listening
 
-from AccelerationStrategy import InteractiveAcceleration, CustomAccelerationPerPps, StaticDelayPlanner, \
-    LinearAcceleration
-from Controller import BipolarStepperMotorDriver
-from ControllerFactory import ControllerFactory, StaticControllerFactory, DynamicControllerFactory
-from StepperMotor import PG35S_D48_HHC2, GenericStepper
+from stepper_motors_juanmf1.AccelerationStrategy import CustomAccelerationPerPps
+from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver
+from stepper_motors_juanmf1.ControllerFactory import ControllerFactory, StaticControllerFactory, DynamicControllerFactory
+from stepper_motors_juanmf1.StepperMotor import GenericStepper
 
 
 class Benchmark:

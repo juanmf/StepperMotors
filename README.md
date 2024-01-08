@@ -1,5 +1,3 @@
-from src.stepper_motors_juanmf1.Navigation import DynamicNavigation
-
 # Intro
 
 Although Python and PC in general (RPI in particular) are not optimal for accurate timing of stepper motor pulses
@@ -40,9 +38,34 @@ A few distinct concepts have been implemented:
 ![doc/collab.png](./doc/collab.png):
 
 ## Install
+### Happy path
 
+If everything works fine (on my RPI this method gets stuck.)
 `pip install -i https://test.pypi.org/simple/ stepper-motors-juanmf1==0.0.2`
 
+### Manually
+
+Manually (find latest link at https://test.pypi.org/project/stepper-motors-juanmf1/#files copy link for 
+stepper_motors_juanmf1-<latest version>-py3-none-any.whl).
+Example with stepper_motors_juanmf1-0.0.2-py3-none-any.whl:
+```commandline
+juanmf@raspberrypi:~/turret/turret $ wget https://test-files.pythonhosted.org/packages/8b/7d/289fdee8b0a01e3c0927b9407e14803341daa0d50e65cb592de9a41581b7/stepper_motors_juanmf1-0.0.2-py3-none-any.whl
+--2024-01-08 14:23:42--  https://test-files.pythonhosted.org/packages/8b/7d/289fdee8b0a01e3c0927b9407e14803341daa0d50e65cb592de9a41581b7/stepper_motors_juanmf1-0.0.2-py3-none-any.whl
+...
+Saving to: ‘stepper_motors_juanmf1-0.0.2-py3-none-any.whl’
+
+stepper_motors_juanmf1-0.0.2-py3-none-any.whl      100%[================================================================================================================>]  21.98K  --.-KB/s    in 0.007s  
+
+2024-01-08 14:23:43 (3.01 MB/s) - ‘stepper_motors_juanmf1-0.0.2-py3-none-any.whl’ saved [22507/22507]
+
+juanmf@raspberrypi:~/turret/turret $ pip install ../
+stepper_motors_juanmf1-0.0.2-py3-none-any.whl  turret/                                        
+juanmf@raspberrypi:~/turret/turret $ pip install ../stepper_motors_juanmf1-0.0.2-py3-none-any.whl 
+Looking in indexes: https://pypi.org/simple, https://www.piwheels.org/simple
+Processing /home/juanmf/turret/stepper_motors_juanmf1-0.0.2-py3-none-any.whl
+Installing collected packages: stepper-motors-juanmf1
+Successfully installed stepper-motors-juanmf1-0.0.2
+```
 ## Usage
 
 ### Acceleration Strategies
