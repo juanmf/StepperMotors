@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "stepper_motors_juanmf1"
-version = "0.0.3"
+version = "0.0.4"
 authors = [
   { name="Juan Manuel Fernandez", email="juanmf@gmail.com" },
 ]

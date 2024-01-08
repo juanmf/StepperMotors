@@ -1,6 +1,6 @@
 # Static or responsive/dynamic navigation implementations.
-from myMath import cmp
-from RPi import GPIO
+from stepper_motors_juanmf1.myMath import cmp
+from RPi.GPIO import GPIO
 
 
 class Navigation:

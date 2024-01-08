@@ -1,8 +1,10 @@
-from AccelerationStrategy import (LinearAcceleration, AccelerationStrategy, ExponentialAcceleration,
-                                  CustomAccelerationPerPps, DynamicDelayPlanner, StaticDelayPlanner,
-                                  InteractiveAcceleration, DelayPlanner)
-from Controller import DRV8825MotorDriver
-from Navigation import DynamicNavigation, StaticNavigation, Navigation
+from stepper_motors_juanmf1.AccelerationStrategy import (LinearAcceleration, AccelerationStrategy,
+                                                         ExponentialAcceleration,
+                                                         CustomAccelerationPerPps, DynamicDelayPlanner,
+                                                         StaticDelayPlanner,
+                                                         InteractiveAcceleration, DelayPlanner)
+from stepper_motors_juanmf1.Controller import DRV8825MotorDriver
+from stepper_motors_juanmf1.Navigation import DynamicNavigation, StaticNavigation, Navigation
 
 
 class ControllerFactory:

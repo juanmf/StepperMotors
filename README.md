@@ -66,6 +66,22 @@ Processing /home/juanmf/turret/stepper_motors_juanmf1-0.0.2-py3-none-any.whl
 Installing collected packages: stepper-motors-juanmf1
 Successfully installed stepper-motors-juanmf1-0.0.2
 ```
+
+To upgrade to a newer release manually, find latest whl file as explained above, then:
+now installing `stepper_motors_juanmf1-0.0.3-py3-none-any.whl`, overriding `0.0.2`
+```commandline
+
+juanmf@raspberrypi:~/turret $ pip install --upgrade stepper_motors_juanmf1-0.0.3-py3-none-any.whl 
+Looking in indexes: https://pypi.org/simple, https://www.piwheels.org/simple
+Processing ./stepper_motors_juanmf1-0.0.3-py3-none-any.whl
+Installing collected packages: stepper-motors-juanmf1
+  Attempting uninstall: stepper-motors-juanmf1
+    Found existing installation: stepper-motors-juanmf1 0.0.2
+    Uninstalling stepper-motors-juanmf1-0.0.2:
+      Successfully uninstalled stepper-motors-juanmf1-0.0.2
+Successfully installed stepper-motors-juanmf1-0.0.3
+```
+
 ## Usage
 
 ### Acceleration Strategies

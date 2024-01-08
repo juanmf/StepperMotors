@@ -1,5 +1,4 @@
 import threading
-import time
 
 
 # Assumes Controller:
@@ -29,6 +28,7 @@ class StepperMotor:
     def __init__(self, pps, sleepTime, minPps):
         super().__init__()
         # Sets GPIO pins
+        # Todo: assess removal.
         self.settingsLock = threading.Lock()
         self.sleepTime = sleepTime
         # Pulses per second
