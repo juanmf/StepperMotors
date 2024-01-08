@@ -99,9 +99,10 @@ I try to feed F1 with nextPPS iteratively to simulate acceleration process that 
 In this case with `minSpeed=200 PPS` and `maxSpeed=900 PPS` it'd take **6 steps to reach max speed** using 
 `ExponentialAcceleration` with initial acceleration factor of (`b=2`).
  
+`Fn1(PPS) -> PPS = a * b ** (1.01 - (x / c))`; `c=maxPPS`; `a=currentPPS`; `b=initialSpeedUpFactor`
 <img src="./doc/photo1704731655.jpeg" alt="RampingUp starting at 200 PPS" width="400"/>
 
-> Starting at minPPS of 200, ramping Up, uses Fn1 200 PPS -> 345 PPS
+> Starting at minPPS of 200, ramping Up, uses Fn1(200 PPS) -> 345 PPS
 > So next speed will be 345 PPS...
 
 <img src="./doc/photo1704731655_2.jpeg" alt="RampingUp next speed" width="400"/>
