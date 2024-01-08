@@ -68,18 +68,17 @@ Successfully installed stepper-motors-juanmf1-0.0.2
 ```
 
 To upgrade to a newer release manually, find latest whl file as explained above, then:
-now installing `stepper_motors_juanmf1-0.0.3-py3-none-any.whl`, overriding `0.0.2`
+now installing `stepper_motors_juanmf1-0.0.4-py3-none-any.whl`, overriding `0.0.3`
 ```commandline
-
-juanmf@raspberrypi:~/turret $ pip install --upgrade stepper_motors_juanmf1-0.0.3-py3-none-any.whl 
+juanmf@raspberrypi:~/turret $ pip install --upgrade stepper_motors_juanmf1-0.0.4-py3-none-any.whl
 Looking in indexes: https://pypi.org/simple, https://www.piwheels.org/simple
-Processing ./stepper_motors_juanmf1-0.0.3-py3-none-any.whl
+Processing ./stepper_motors_juanmf1-0.0.4-py3-none-any.whl
 Installing collected packages: stepper-motors-juanmf1
   Attempting uninstall: stepper-motors-juanmf1
-    Found existing installation: stepper-motors-juanmf1 0.0.2
-    Uninstalling stepper-motors-juanmf1-0.0.2:
-      Successfully uninstalled stepper-motors-juanmf1-0.0.2
-Successfully installed stepper-motors-juanmf1-0.0.3
+    Found existing installation: stepper-motors-juanmf1 0.0.3
+    Uninstalling stepper-motors-juanmf1-0.0.3:
+      Successfully uninstalled stepper-motors-juanmf1-0.0.3
+Successfully installed stepper-motors-juanmf1-0.0.4
 ```
 
 ## Usage
@@ -304,3 +303,31 @@ PPS	SpeedDelta PPS
 180.0	0
 ```
 Will clean up output shortly.
+
+Using `Benchmark` from outside the module
+```Python
+from stepper_motors_juanmf1.StepperMotor import GenericStepper
+from stepper_motors_juanmf1.Benchmark import Benchmark
+
+
+class Training:
+
+    @staticmethod
+    def main():
+        args = sys.argv[1:]
+        if len(args) > 0 and args[0] == "bench":
+            print("Benchmarking Motor")
+            motor = GenericStepper(maxPps=2000, minPps=190)
+            
+            Benchmark.initBenchmark(motor, directionPin=23, steoPin=8)
+        
+
+if __name__ == '__main__':
+    Training.main()
+```
+usage:
+```commandline
+$ sudo pigpiod -s 10 -t 0 
+$ python3 ./Training.py bench
+
+```

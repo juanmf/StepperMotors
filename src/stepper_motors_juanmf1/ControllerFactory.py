@@ -15,40 +15,40 @@ class ControllerFactory:
         pass
 
     # Returns a controller that can't (de)accelerate.
-    def getFlatDRV8825With(self, stepperMotor, directionPin, StepPin):
+    def getFlatDRV8825With(self, stepperMotor, directionPin, stepPin):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = AccelerationStrategy(stepperMotor, delayPlanner)
         delayPlanner.setAccelerationStrategy(acceleration)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, StepPin, navigation)
+        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation)
 
-    def getLinearDRV8825With(self, stepperMotor, directionPin, StepPin):
+    def getLinearDRV8825With(self, stepperMotor, directionPin, stepPin):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = LinearAcceleration(stepperMotor, delayPlanner)
         delayPlanner.setAccelerationStrategy(acceleration)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, StepPin, navigation)
+        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation)
 
-    def getExponentialDRV8825With(self, stepperMotor, directionPin, StepPin):
+    def getExponentialDRV8825With(self, stepperMotor, directionPin, stepPin):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
         delayPlanner.setAccelerationStrategy(acceleration)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, StepPin, navigation)
+        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation)
 
-    def getCustomTorqueCharacteristicsDRV8825With(self, stepperMotor, directionPin, StepPin, transformations=None):
+    def getCustomTorqueCharacteristicsDRV8825With(self, stepperMotor, directionPin, stepPin, transformations=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = CustomAccelerationPerPps(stepperMotor, delayPlanner, transformations=transformations)
         delayPlanner.setAccelerationStrategy(acceleration)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, StepPin, navigation)
+        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation)
 
-    def getInteractiveDRV8825With(self, stepperMotor, directionPin, StepPin, minSpeedDelta, minPps):
+    def getInteractiveDRV8825With(self, stepperMotor, directionPin, stepPin, minSpeedDelta, minPps):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = InteractiveAcceleration(stepperMotor, delayPlanner, minSpeedDelta, minPps)
         delayPlanner.setAccelerationStrategy(acceleration)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, StepPin, navigation)
+        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation)
 
 
 class StaticControllerFactory(ControllerFactory):
