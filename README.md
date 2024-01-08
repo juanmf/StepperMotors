@@ -90,26 +90,32 @@ class MyRoboticArm:
 In this example we use ExponentialAcceleration, which exponentially decreases increments as PPS goes up in a `RampingUp` 
 state behaves as follows ([see this to play around](https://www.desmos.com/calculator/luvnt6dtae)):
 
-![RampingUp starting at 200 PPS](./doc/photo1704731655.jpeg)
+<img src="./doc/photo1704731655.jpeg" alt="RampingUp starting at 200 PPS" width="400"/>
+
 > Starting at minPPS of 200, ramping Up, uses Fn1 200 PPS -> 345 PPS
 > So next speed will be 345 PPS...
 
-![RampingUp next speed](./doc/photo1704731655_2.jpeg)
+<img src="./doc/photo1704731655_2.jpeg" alt="RampingUp next speed" width="400"/>
+
 > (approximating 345 with 350) 
 > 350 PPS -> 538 PPS 
 
-![RampingUp next speed](./doc/photo1704731655_3.jpeg)
+<img src="./doc/photo1704731655_3.jpeg" alt="RampingUp next speed" width="400"/>
+
 > (approximating 538 with 500, yes, 550 was closer...) 
 > 500 PPS -> 685 PPS
 
-![RampingUp next speed](./doc/photo1704731655_4.jpeg)
+<img src="./doc/photo1704731655_4.jpeg" alt="RampingUp next speed" width="400"/>
+
 > (approximating 685 with 700) 
 > 700 PPS -> 822 PPS 
 
-![RampingUp next speed](./doc/photo1704731655_5.jpeg)
+<img src="./doc/photo1704731655_5.jpeg" alt="RampingUp next speed" width="400"/>
+
 > 850 PPS -> 889 PPS
 
-![RampingUp next speed](./doc/photo1704731655_6.jpeg)
+<img src="./doc/photo1704731655_6.jpeg" alt="RampingUp next speed" width="400"/>
+
 > 900 PPS -> 906 PPS
 > ExponentialAcceleration limits speeds to maxPPS so this would get stuck at 900 PPS
  
