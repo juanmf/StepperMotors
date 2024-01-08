@@ -1,4 +1,8 @@
 @startuml
+class BlockingQueueWorker {
+    startWorker()
+    killWorker()
+}
 class UsesSingleThreadedExecutor
 class ThreadPoolExecutorStackTraced
 
@@ -60,8 +64,8 @@ class State {
 ''' structure
 ThreadPoolExecutorStackTraced --|> ThreadPoolExecutor
 UsesSingleThreadedExecutor --|> ThreadPoolExecutorStackTraced
-
-BipolarStepperMotorDriver ---|> UsesSingleThreadedExecutor
+BlockingQueueWorker --|> UsesSingleThreadedExecutor
+BipolarStepperMotorDriver ---|> BlockingQueueWorker
 
 PG35S_D48_HHC2 -up-|> StepperMotor
 GenericStepper -up-|> StepperMotor

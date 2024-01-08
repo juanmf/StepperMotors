@@ -5,7 +5,7 @@ Although Python and PC in general (RPI in particular) are not optimal for accura
 a versatile tool for managing a set of stepper motors (through their drivers) in several ways that might fit specific 
 scenarios.
 
-A few distinct concepts have been implemented; see [doc/collab.png](./doc/collab.png):
+A few distinct concepts have been implemented:
 * Driver (or Controller, used interchangeably), each instantiated driver will behave as a dedicated single thread worker
   (see `BlockingQueueWorker`) which receives steps jobs through a shared queue, in an attempt decouple steps timing 
   from the rest of the system, (here the GIL imposes some challenged in theory).
@@ -29,6 +29,8 @@ A few distinct concepts have been implemented; see [doc/collab.png](./doc/collab
   used as `YourStepperMotorSubClass.TORQUE_CHARACTERISTICS` or as an input to `CustomAccelerationPerPps` acceleration 
   strategy's `transformations` constructor argument. This enables yor motor to reach max speed in the least amount of 
   steps possible while keeping synch (useful when speed matters).
+
+![doc/collab.png](./doc/collab.png):
 
 ## Install
 
