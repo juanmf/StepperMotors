@@ -1,8 +1,8 @@
 import queue
 
-from AccelerationStrategy import AccelerationStrategy
-from StepperMotor import StepperMotor
-from BlockingQueueWorker import BlockingQueueWorker
+from stepper_motors_juanmf1.AccelerationStrategy import AccelerationStrategy
+from stepper_motors_juanmf1.StepperMotor import StepperMotor
+from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
 from RPi import GPIO
 import pigpio
 import time

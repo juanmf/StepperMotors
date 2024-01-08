@@ -1,4 +1,4 @@
-from myMath import cmp, sign
+from stepper_motors_juanmf1.myMath import cmp, sign
 from StepperMotor import StepperMotor
 from bisect import bisect_left
 

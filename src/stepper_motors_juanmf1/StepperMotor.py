@@ -73,7 +73,8 @@ class PG35S_D48_HHC2(StepperMotor):
     format: (PPS, increment) Speeds up the fastest from 200 to 1044 PPS.
     TORQUE_CHARACTERISTICS = [(200, 300), (500, 200), (700, 100), (800, 50), (850, 25), (875, 25), (900, 1)]
     """
-    TORQUE_CHARACTERISTICS = [(180.0, 320), (500.0, 240), (740.0, 205), (945.0, 0)]
+    # TORQUE_CHARACTERISTICS = [(180.0, 320), (500.0, 240), (740.0, 205), (945.0, 0)]
+    TORQUE_CHARACTERISTICS = [(205, 300), (505, 200), (705, 100), (805, 55), (860, 0)]
 
     """
     Steps per Revolution with 1.8 deg per step
@@ -113,8 +114,8 @@ class PG35S_D48_HHC2(StepperMotor):
     PPS_MAP = {True: LOADED_MAX_PPS, False: NOLOAD_MAX_PPS}
     SLEEP_TIME_MAP = {True: LOADED_SLEEP, False: NOLOAD_SLEEP}
 
-    def __init__(self, loaded: bool = True, minPps=210, maxTorquePps=450):
-        super().__init__(self.PPS_MAP[loaded], self.SLEEP_TIME_MAP[loaded], minPps, maxTorquePps)
+    def __init__(self, loaded: bool = True, minPps=210):
+        super().__init__(self.PPS_MAP[loaded], self.SLEEP_TIME_MAP[loaded], minPps)
 
 
 class GenericStepper(StepperMotor):
