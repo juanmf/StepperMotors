@@ -1,7 +1,6 @@
 # Static or responsive/dynamic navigation implementations.
 from stepper_motors_juanmf1.myMath import cmp
-from RPi.GPIO import GPIO
-
+from RPi import GPIO
 
 class Navigation:
     def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate):
