@@ -27,7 +27,7 @@ A few distinct concepts have been implemented:
   characteristics, all in terms of PPS. For instantaneous torque characteristics the output (with format
   `[(minPPS, incrementPPS_1), (minPPS + incrementPPS_1, incrementPPS_2), ..., (maxPPS, 0)]`) can be
   used as `YourStepperMotorSubClass.TORQUE_CHARACTERISTICS` or as an input to `CustomAccelerationPerPps` acceleration 
-  strategy's `transformations` constructor argument. This enables yor motor to reach max speed in the least amount of 
+  strategy's `transformations` constructor argument. This enables your motor to reach max speed in the least amount of 
   steps possible while keeping synch (useful when speed matters).
   * Currently tested on (see https://www.reddit.com/r/robotics/comments/18ukw4p/benchmarking_stepper_motor/):  
     * Raspberry Pi 4B with,
@@ -107,12 +107,12 @@ class MyRoboticArm:
     Step modes can also be set for micro-stepping. Tho ControllerFactory methods use only full step mode ATM.
     Sleep pin can also be set for DRV8825MotorDriver when no holding torque neeed.  
     """
-    self.elbow =    MyRoboticArm.setupDriver(directionPin=23, StepPin=24) 
-    self.shoulder = MyRoboticArm.setupDriver(directionPin=14, StepPin=15) 
-    self.hand =     MyRoboticArm.setupDriver(directionPin=25, StepPin=8) 
+    self.elbow =    MyRoboticArm.setupDriver(directionPin=23, stepPin=24) 
+    self.shoulder = MyRoboticArm.setupDriver(directionPin=14, stepPin=15) 
+    self.hand =     MyRoboticArm.setupDriver(directionPin=25, stepPin=8) 
     
   @staticmethod
-  def setupDriver(*, directionPin, StepPin):
+  def setupDriver(*, directionPin, stepPin):
     stepperMotor = GenericStepper(maxPps=2000, minPps=150)
     delayPlanner = DynamicDelayPlanner()
     navigation = DynamicNavigation()
@@ -120,7 +120,7 @@ class MyRoboticArm:
     acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
     # Important to set this reference once you have acceleration instance! 
     delayPlanner.setAccelerationStrategy(acceleration)
-    return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, StepPin, navigation)
+    return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation)
   
 
 ```
@@ -319,7 +319,7 @@ class Training:
             print("Benchmarking Motor")
             motor = GenericStepper(maxPps=2000, minPps=190)
             
-            Benchmark.initBenchmark(motor, directionPin=23, steoPin=8)
+            Benchmark.initBenchmark(motor, directionPin=23, stepPin=8)
         
 
 if __name__ == '__main__':
