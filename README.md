@@ -87,9 +87,18 @@ class MyRoboticArm:
 
 ```
 
-In this example we use ExponentialAcceleration, which exponentially decreases increments as PPS goes up in a `RampingUp` 
+In this example we use `ExponentialAcceleration`, which exponentially decreases increments as PPS goes up in a `RampingUp` 
 state behaves as follows ([see this to play around](https://www.desmos.com/calculator/luvnt6dtae)):
 
+Current speed is `a`, marked by `x=a` fn for visual aid. Intersection between Identity fn `x=x` and `x=a` shows how 
+large is the jump in PPS to next speed, either when `RampingUp`(Fn1, in red) or `RampingDown`(Fn2, in black).
+
+In the following desktop test, black dot shows `(currentSpeed, nextSpeed)` or `F(currentPPS) -> nextPPS`. 
+
+I try to feed F1 with nextPPS iteratively to simulate acceleration process that takes place at run time.
+In this case with `minSpeed=200 PPS` and `maxSpeed=900 PPS` it'd take **6 steps to reach max speed** using 
+`ExponentialAcceleration` with initial acceleration factor of (`b=2`).
+ 
 <img src="./doc/photo1704731655.jpeg" alt="RampingUp starting at 200 PPS" width="400"/>
 
 > Starting at minPPS of 200, ramping Up, uses Fn1 200 PPS -> 345 PPS
