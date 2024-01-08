@@ -1,3 +1,5 @@
+from src.stepper_motors_juanmf1.Navigation import DynamicNavigation
+
 # Intro
 
 Although Python and PC in general (RPI in particular) are not optimal for accurate timing of stepper motor pulses
@@ -43,6 +45,74 @@ A few distinct concepts have been implemented:
 
 ## Usage
 
+### Acceleration Strategies
+
+Factory methods from `ControllerFactory` ([🔗](./src/stepper_motors_juanmf1/ControllerFactory.py)) provide easy access to
+well constructed Drivers with specific acceleration profiles.
+
+
+```Python3
+from stepper_motors_juanmf1 import (GenericStepper, 
+                                    DRV8825MotorDriver, 
+                                    ExponentialAcceleration, 
+                                    DynamicDelayPlanner, 
+                                    DynamicNavigation) 
+
+class MyRoboticArm:
+  """
+  Example class using multiple driver instances (many motors).
+  """
+  
+  def __init__(self):
+    """
+    Assuming you connected this motor driver's direction and step pins accordingly. 
+    Step modes can also be set for micro-stepping. Tho ControllerFactory methods use only full step mode ATM.
+    Sleep pin can also be set for DRV8825MotorDriver when no holding torque neeed.  
+    """
+    self.elbow =    MyRoboticArm.setupDriver(directionPin=23, StepPin=24) 
+    self.shoulder = MyRoboticArm.setupDriver(directionPin=14, StepPin=15) 
+    self.hand =     MyRoboticArm.setupDriver(directionPin=25, StepPin=8) 
+    
+  @staticmethod
+  def setupDriver(*, directionPin, StepPin):
+    stepperMotor = GenericStepper(maxPps=2000, minPps=150)
+    delayPlanner = DynamicDelayPlanner()
+    navigation = DynamicNavigation()
+    
+    acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
+    # Important to set this reference once you have acceleration instance! 
+    delayPlanner.setAccelerationStrategy(acceleration)
+    return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, StepPin, navigation)
+  
+
+```
+
+In this example we use ExponentialAcceleration, which exponentially decreases increments as PPS goes up in a `RampingUp` 
+state behaves as follows ([see this to play around](https://www.desmos.com/calculator/luvnt6dtae)):
+
+![RampingUp starting at 200 PPS](./doc/photo1704731655.jpeg)
+> Starting at minPPS of 200, ramping Up, uses Fn1 200 PPS -> 345 PPS
+> So next speed will be 345 PPS...
+
+![RampingUp next speed](./doc/photo1704731655_2.jpeg)
+> (approximating 345 with 350) 
+> 350 PPS -> 538 PPS 
+
+![RampingUp next speed](./doc/photo1704731655_3.jpeg)
+> (approximating 538 with 500, yes, 550 was closer...) 
+> 500 PPS -> 685 PPS
+
+![RampingUp next speed](./doc/photo1704731655_4.jpeg)
+> (approximating 685 with 700) 
+> 700 PPS -> 822 PPS 
+
+![RampingUp next speed](./doc/photo1704731655_5.jpeg)
+> 850 PPS -> 889 PPS
+
+![RampingUp next speed](./doc/photo1704731655_6.jpeg)
+> 900 PPS -> 906 PPS
+> ExponentialAcceleration limits speeds to maxPPS so this would get stuck at 900 PPS
+ 
 ### Benchmark
 for CLI Benchmark, you need download sources and cd to `src/stepper_motors_juanmf1/`
 start gpio demon on your Raspberry Pi and start benchmark passing step and direction pins per your setup.

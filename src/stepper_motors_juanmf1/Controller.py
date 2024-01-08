@@ -221,6 +221,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                  stepsMode="Full",
                  modeGpioPins=None,
                  emergencyStopGpioPin=None):
-        super().__init__(stepperMotor, accelerationStrategy, directionGpioPin, stepGpioPin, navigation, sleepGpioPin=sleepGpioPin,
-                         stepsMode=stepsMode,
-                         modeGpioPins=modeGpioPins, emergencyStopGpioPin=emergencyStopGpioPin)
+        super().__init__(stepperMotor, accelerationStrategy, directionGpioPin, stepGpioPin, navigation,
+                         sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
+                         emergencyStopGpioPin=emergencyStopGpioPin)

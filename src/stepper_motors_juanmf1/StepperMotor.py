@@ -126,5 +126,5 @@ class GenericStepper(StepperMotor):
     """
     SPR = 360 // 1.8
 
-    def __init__(self, pps, minPps=150):
-        super().__init__(pps, 1 / pps, minPps)
+    def __init__(self, *, maxPps, minPps=150):
+        super().__init__(maxPps, 1 / maxPps, minPps)

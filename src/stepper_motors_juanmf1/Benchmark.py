@@ -330,7 +330,7 @@ class Benchmark:
         if len(args) < 2 or not (int(args[0]) < 45 and int(args[1]) < 45):
             raise RuntimeError("Need directionPin, StepPin to init Controller.")
 
-        motor = GenericStepper(Benchmark.ABSOLUTE_MIN_PPS, Benchmark.ABSOLUTE_MIN_PPS)
+        motor = GenericStepper(maxPps=Benchmark.ABSOLUTE_MIN_PPS, minPps=Benchmark.ABSOLUTE_MIN_PPS)
         print("Benchmarking azimuth Motor")
         Benchmark.initBenchmark(motor, int(args[0]), int(args[1]))
 
