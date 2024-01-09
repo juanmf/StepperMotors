@@ -1,10 +1,16 @@
 import threading
 
 
-# Assumes Controller:
-#   Cheap DRV8825 Stepper Motor Controller IC https://www.rototron.info/wp-content/uploads/PiStepper_DRV8825.pdf
-#   https://lastminuteengineers.com/drv8825-stepper-motor-driver-arduino-tutorial/
+
 class StepperMotor:
+    """
+    Abstract class for Stepper motor, a StepperMotor implementations are placeholder for motor specifics
+    Actual behavior is implemented elsewhere (see Controller and AccelerationStrategy).
+
+    Interesting reads
+      https://us.metoree.com/categories/stepping-motor/
+      https://forum.arduino.cc/t/stepper-motor-basics/275223
+    """
     TORQUE_UNIT_N_M = "N-m"
     # 1 "N-m" = 141.612 "oz-in"
     TORQUE_UNIT_OZ_IN = "oz-in"
@@ -51,18 +57,24 @@ class StepperMotor:
         self.settingsLock.release()
 
 
-# Motor PG35S-D48-HHC2
-# https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/571/PG35S-D48-HHC2_Standard.pdf
-# https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/15/PG35S-D48-HHC2_Spec.pdf
-# pull out torque: 200pps ... 392.3 mNm MIN
-# max no load response: 850pps
-# max slew speed: 1500 pps
-# driver: peak current 500mA
-# driver: rated current 250mA
-# driver: voltage 24V
-# driver mode constant current
-# Life 3000h
+
 class PG35S_D48_HHC2(StepperMotor):
+    """
+    Motor PG35S-D48-HHC2
+    https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/571/PG35S-D48-HHC2_Standard.pdf
+    https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/15/PG35S-D48-HHC2_Spec.pdf
+    https://nmbtc.com/parts/pg35s-d48-hhc2/
+    https://www.eevblog.com/forum/reviews/solder-pasteflux-manual-syringe-applicator/?action=dlattach;attach=174358
+    pull out torque: 200pps ... 392.3 mNm MIN
+    max no load response: 850pps
+    max slew speed: 1500 pps
+    driver: peak current 500mA
+    driver: rated current 250mA
+    driver: voltage 24V
+    driver mode constant current
+    Life 3000h
+    """
+
     MIN_PPS = None
     MAX_TORQUE_PPS = None
     # pps -> N-m x 10^-4
