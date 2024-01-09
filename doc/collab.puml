@@ -9,7 +9,6 @@ class ThreadPoolExecutorStackTraced
 class ControllerFactory {
     getLinearDRV8825With(stepperMotor, directionPin, StepPin):
     getExponentialDRV8825With(stepperMotor, directionPin, StepPin):
-    getTwoStageExponentialDRV8825With(stepperMotor, directionPin, StepPin):
     getCustomTorqueCharacteristicsDRV8825With(stepperMotor, directionPin, StepPin):
 }
 class StaticControllerFactory
