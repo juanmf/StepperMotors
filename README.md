@@ -1,3 +1,5 @@
+from src.stepper_motors_juanmf1.myMath import sign
+
 # Intro
 
 Although Python and PC in general (RPI in particular) are not optimal for accurate timing of stepper motor pulses
@@ -94,7 +96,9 @@ from stepper_motors_juanmf1 import (GenericStepper,
                                     DRV8825MotorDriver, 
                                     ExponentialAcceleration, 
                                     DynamicDelayPlanner, 
-                                    DynamicNavigation) 
+                                    DynamicNavigation,
+                                    myMath) 
+from time import sleep
 
 class MyRoboticArm:
   """
@@ -108,9 +112,52 @@ class MyRoboticArm:
     Sleep pin can also be set for DRV8825MotorDriver when no holding torque neeed.  
     """
     self.elbow =    MyRoboticArm.setupDriver(directionPin=23, stepPin=24) 
+    self.elbowPosition = 0
     self.shoulder = MyRoboticArm.setupDriver(directionPin=14, stepPin=15) 
+    self.shoulderPosition = 0
     self.hand =     MyRoboticArm.setupDriver(directionPin=25, stepPin=8) 
+    self.handPosition = 0
     
+    # Moving arm
+    self.moveArm(elbowDelta=100, shoulderDelta=150, handDelta=200)
+    sleep(0.05)
+    # While still moving, Send contradictory order to arm. it should gracefully stop and 
+    # speed back up in opposite direction.  
+    self.moveArm(elbowDelta=-100, shoulderDelta=-150, handDelta=-200)
+    
+  def elbowPositionListener(self, currentPosition, targetPosition, direction):
+    self.elbowPosition = currentPosition
+    
+  def shoulderPositionListener(self, currentPosition, targetPosition, direction):
+    self.shoulderPosition = currentPosition
+    
+  def handPositionListener(self, currentPosition, targetPosition, direction):
+    self.handPosition = currentPosition
+    
+  def moveArm(self, elbowDelta, shoulderDelta, handDelta):
+    # moving the motors
+    if elbowDelta != 0:
+      # Non blocking, sends step jopb to driver worker,
+      if myMath.sign(elbowDelta) == 1:
+        self.elbow.stepClockWise(elbowDelta, self.elbowPositionListener)
+      else:
+        self.elbow.stepCounterClockWise(elbowDelta, self.elbowPositionListener)
+    
+    if shoulderDelta != 0:
+      # Non blocking, sends step jopb to driver worker,
+      if myMath.sign(shoulderDelta) == 1:
+        self.shoulder.stepClockWise(elbowDelta, self.shoulderPositionListener)
+      else:
+        self.shoulder.stepCounterClockWise(elbowDelta, self.shoulderPositionListener)
+
+    if handDelta != 0:
+      # Non blocking, sends step jopb to driver worker,
+      if myMath.sign(handDelta) == 1:
+        self.hand.stepClockWise(handDelta, self.handPositionListener)
+      else:
+        self.hand.stepCounterClockWise(handDelta, self.handPositionListener)
+
+              
   @staticmethod
   def setupDriver(*, directionPin, stepPin):
     stepperMotor = GenericStepper(maxPps=2000, minPps=150)
