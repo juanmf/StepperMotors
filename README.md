@@ -137,27 +137,26 @@ class MyRoboticArm:
   def moveArm(self, elbowDelta, shoulderDelta, handDelta):
     # moving the motors
     if elbowDelta != 0:
-      # Non blocking, sends step jopb to driver worker,
+      # Non blocking, sends step job to driver worker,
       if myMath.sign(elbowDelta) == 1:
         self.elbow.stepClockWise(elbowDelta, self.elbowPositionListener)
       else:
         self.elbow.stepCounterClockWise(elbowDelta, self.elbowPositionListener)
     
     if shoulderDelta != 0:
-      # Non blocking, sends step jopb to driver worker,
+      # Non blocking, sends step job to driver worker,
       if myMath.sign(shoulderDelta) == 1:
         self.shoulder.stepClockWise(elbowDelta, self.shoulderPositionListener)
       else:
         self.shoulder.stepCounterClockWise(elbowDelta, self.shoulderPositionListener)
 
     if handDelta != 0:
-      # Non blocking, sends step jopb to driver worker,
+      # Non blocking, sends step job to driver worker,
       if myMath.sign(handDelta) == 1:
         self.hand.stepClockWise(handDelta, self.handPositionListener)
       else:
         self.hand.stepCounterClockWise(handDelta, self.handPositionListener)
-
-              
+                           
   @staticmethod
   def setupDriver(*, directionPin, stepPin):
     stepperMotor = GenericStepper(maxPps=2000, minPps=150)
@@ -168,7 +167,6 @@ class MyRoboticArm:
     # Important to set this reference once you have acceleration instance! 
     delayPlanner.setAccelerationStrategy(acceleration)
     return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation)
-  
 
 ```
 
