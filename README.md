@@ -1,5 +1,3 @@
-from src.stepper_motors_juanmf1.myMath import sign
-
 # Intro
 
 Although Python and PC in general (RPI in particular) are not optimal for accurate timing of stepper motor pulses
