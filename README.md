@@ -167,7 +167,7 @@ class MyRoboticArm:
     return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation)
 
 ```
-
+#### ExponentialAcceleration
 In this example we use `ExponentialAcceleration`, which exponentially decreases increments as PPS goes up in a `RampingUp` 
 state behaves as follows ([see this to play around](https://www.desmos.com/calculator/luvnt6dtae)):
 
@@ -210,6 +210,9 @@ In this case with `minSpeed=200 PPS` and `maxSpeed=900 PPS` it'd take **6 steps 
 > 900 PPS -> 906 PPS
 > ExponentialAcceleration limits speeds to maxPPS so this would get stuck at 900 PPS
  
+Effectively following this set of curves, [for speed up and slow down](https://www.desmos.com/calculator/ruorm9qqhn):
+![exponentialAccelerationSpeedChangeCurves](./doc/exponentialAccelerationSpeedChangeCurves.png)
+
 ### Benchmark
 for CLI Benchmark, you need download sources and cd to `src/stepper_motors_juanmf1/`
 start gpio demon on your Raspberry Pi and start benchmark passing step and direction pins per your setup.
