@@ -1,7 +1,7 @@
 # Intro
 
 Although Python and PC in general (RPI in particular) are not optimal for accurate timing of stepper motor pulses
-(SO scheduler + Python sleep inaccuracies and, ATM, Global Interpreter Lock [GIL]), this library aims at providing
+(OS scheduler + Python sleep inaccuracies and, ATM, Global Interpreter Lock [GIL]), this library aims at providing
 a versatile tool for managing a set of stepper motors (through their drivers) in several ways that might fit specific 
 scenarios.
 
