@@ -370,3 +370,31 @@ $ sudo pigpiod -s 10 -t 0
 $ python3 ./Training.py bench
 
 ```
+
+## Contributing
+
+Reminder of release steps for contributor.
+**Don't forget to bump version in pyproject.toml** otherwise you can't upload package to package index (repeated 
+file name).
+
+```commandline
+# work station:
+$ git commit -am"last change description" && git push
+
+# might need PR to send changes to main repo?
+
+# raspberry pi cd to repository dir.
+$ git pull
+$ rm ./dist/*
+$ python3 -m build
+
+# Next step I do from workstation if it fails from RPI. 
+# So optionally at workstation:
+$ scp <user>@raspberrypi.local:/<projectDir>/dist/* /<projectDir>/dist/
+
+# Then upload to index
+$ python3 -m twine upload --repository testpypi dist/*
+
+# then reinstall on RPI:
+$ pip install --upgrade -i https://test.pypi.org/simple/ stepper-motors-juanmf1
+```
