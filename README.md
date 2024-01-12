@@ -177,6 +177,7 @@ def moveArm(self, elbowDelta, shoulderDelta, handDelta):
     self.hand.signedSteps(handDelta, self.handPositionListener)
         
 ```
+
 #### ExponentialAcceleration
 
 In this example we use `ExponentialAcceleration`, which exponentially decreases increments as PPS goes up in a `RampingUp` 
@@ -215,6 +216,43 @@ Effectively following this set of curves, [for speed up and slow down](https://w
 ![exponentialAccelerationSpeedChangeCurves](./doc/exponentialAccelerationSpeedChangeCurves.png)
 Note that identity `x=x`, speedUp and slowDown curves intersect at zero and maxPPS, effecting no change in speed once 
 current speed hits these extreme values.
+
+### tPrint
+
+When you have many `BlockingQueueWorker`s executing your callables, printing to `STD_OUT` can get messy.
+there are utility functions in `ThreadOrderedPrint.py` to help organize print output.
+
+```Python
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_streams
+
+    def callableThatPrints(self, elbowDelta, handDelta):
+        tprint("computePolarDelta")
+        tprint("rowOrAzimuthDelta, colOrElevationDelta")
+        tprint(elbowDelta, handDelta)
+        tprint("")
+```
+
+This will store the `print()` output in a thread based stream file. When you are ready to dump output: `flush_streams()`
+Will dump threads output and delete buffers.
+Output will be timestamped to the micro second uS (no date). for comparison with other thread's output.
+```commandline
+@start thread dump 2930762816_ThreadPoolExecutor-7_0 ========================================
+======================================================================
+[17:31:49.992524] dispatchMainLoop
+[17:31:49.992575] eventName, eventInfo
+[17:31:49.992612] AimingComplete {'isReady': True}
+...
+@end thread dump =====================================================
+
+@start thread dump 2922370112_ThreadPoolExecutor-8_0 ========================================
+======================================================================
+[17:31:49.856784] Setting direction pin 23 1.
+[17:31:49.856912] State Rest -> RampingUp
+[17:31:49.862105] fireReadyEvent
+...
+@end thread dump =====================================================
+...
+```
 
 ### Benchmark
 for CLI Benchmark, you need download sources and cd to `src/stepper_motors_juanmf1/`
