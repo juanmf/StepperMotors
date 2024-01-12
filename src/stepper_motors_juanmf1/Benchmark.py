@@ -6,9 +6,9 @@ from sshkeyboard import listen_keyboard, stop_listening
 
 from stepper_motors_juanmf1.AccelerationStrategy import CustomAccelerationPerPps
 from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver
-from stepper_motors_juanmf1.ControllerFactory import ControllerFactory, StaticControllerFactory, DynamicControllerFactory
+from stepper_motors_juanmf1.ControllerFactory import DynamicControllerFactory
 from stepper_motors_juanmf1.StepperMotor import GenericStepper
-
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 class Benchmark:
     """
@@ -46,14 +46,14 @@ class Benchmark:
         :param maxPps: If provided, skips maxPPS discovery
         :return: list of max attainable PPS increments from minPPS to maxPPS as [(minPPS, inc1), ..., (maxPPS, 0)]
         """
-        print("\n\n")
-        print("Process has 4 steps, needs human feedback. Make sure you apply relevant load to the motor.")
-        print("1) Find min PPS at which the motor show continuity between steps.")
-        print("2) Find max PPS motor acn keep up with, this by using modest acceleration so might be slow.")
-        print("3) Starting from minPPS will try to jump to greatest next PPS that you observe not to fail with.")
-        print("4) after repeating 3 until maxPPS is reached, dump the data in a format compatible with "
+        tprint("\n\n")
+        tprint("Process has 4 steps, needs human feedback. Make sure you apply relevant load to the motor.")
+        tprint("1) Find min PPS at which the motor show continuity between steps.")
+        tprint("2) Find max PPS motor acn keep up with, this by using modest acceleration so might be slow.")
+        tprint("3) Starting from minPPS will try to jump to greatest next PPS that you observe not to fail with.")
+        tprint("4) after repeating 3 until maxPPS is reached, dump the data in a format compatible with "
               "stepperMotors.CustomAccelerationPerPps.transformations")
-        print("\n\n")
+        tprint("\n\n")
 
         stop_listening()
         minPps = self.findMinPPS(controller) if minPps is None else minPps
@@ -72,18 +72,18 @@ class Benchmark:
 
     @staticmethod
     def printResults(minPps, maxPps, speedBoosts):
-        print(f""
+        tprint(f""
               f"Results"
               f"===========================================================================")
-        print(f"MinSpeed PPS: {minPps}; MaxSpeed PPS: {maxPps}")
-        print("optimal transformations for your motor with current load:")
-        print(speedBoosts)
-        print(f"")
-        print("Same data to play in a spreadsheet")
-        print("PPS\tSpeedDelta PPS")
+        tprint(f"MinSpeed PPS: {minPps}; MaxSpeed PPS: {maxPps}")
+        tprint("optimal transformations for your motor with current load:")
+        tprint(speedBoosts)
+        tprint(f"")
+        tprint("Same data to play in a spreadsheet")
+        tprint("PPS\tSpeedDelta PPS")
         for pps, booster in speedBoosts:
-            print(f"{pps}\t{booster}")
-        print(f"")
+            tprint(f"{pps}\t{booster}")
+        tprint(f"")
 
     """
     Find min speed specific methods
@@ -94,7 +94,7 @@ class Benchmark:
         controller.stepClockWise(10_000, fn)
         while not picked['picked']:
 
-            print(f"picked['picked']: {picked['picked']}")
+            tprint(f"picked['picked']: {picked['picked']}")
             listen_keyboard(
                 on_press=lambda k: self.findMinSpeedControls(k, controller, lambda: self.setPicked(controller, picked)),
                 sequential=True,
@@ -113,8 +113,8 @@ class Benchmark:
     """
 
     def findMaxPPS(self, controller):
-        print("SEARCHING FOR MAX PPS.")
-        print("")
+        tprint("SEARCHING FOR MAX PPS.")
+        tprint("")
         picked = {'picked': False, 'pps': 0}
         fn = lambda c, t, realDirection: self.keepMotorGoingUp(controller, c, controller.currentPosition, picked)
         controller.stepClockWise(10_000, fn)
@@ -125,7 +125,7 @@ class Benchmark:
 
         maxPps = picked['pps'] - controller.accelerationStrategy.getSpeedDelta()
         controller.accelerationStrategy.setMaxPps(maxPps)
-        print(f"Max Speed: {maxPps} <<===")
+        tprint(f"Max Speed: {maxPps} <<===")
         return maxPps
 
     def keepMotorGoingUp(self, controller, currentPosition, lastChangedPosition, picked):
@@ -141,9 +141,9 @@ class Benchmark:
     """
 
     def findTransformations(self, controller, minPps, maxPps, speedBoosts=None):
-        print("")
-        print("FINDING SPEED BOOSTS FOR MOTOR.")
-        print("")
+        tprint("")
+        tprint("FINDING SPEED BOOSTS FOR MOTOR.")
+        tprint("")
         # Stop
         self.stopMotor(controller)
 
@@ -155,9 +155,9 @@ class Benchmark:
 
         controller.accelerationStrategy.done()
 
-        print("")
-        print(f"speedBoosts: {speedBoosts}")
-        print("")
+        tprint("")
+        tprint(f"speedBoosts: {speedBoosts}")
+        tprint("")
 
         controller.stepClockWise(10_000, lambda c, t, d: self.keepMotorSpeedingUp(controller, c, t, speedBoosts))
 
@@ -168,7 +168,7 @@ class Benchmark:
             return
 
         if controller.accelerationStrategy.currentPps >= self.maxPpsFound:
-            print(f"Ending the Search. max speed reached. "
+            tprint(f"Ending the Search. max speed reached. "
                   f"currentPps: {controller.accelerationStrategy.currentPps}; maxPps: {controller.accelerationStrategy.maxPps}"
                   f"accelerationStrategy: {type(controller.accelerationStrategy).__name__}")
             self.speedDeltasSearchEnded = True
@@ -179,16 +179,16 @@ class Benchmark:
             stop_listening()
 
     def passedSpeedBoost(self, controller, speedBoosts):
-        print(f"PASSED speed boost: cPPs: {controller.accelerationStrategy.currentPps} last Speed: {speedBoosts[-1][0]}")
-        print("Restarting cycle.")
+        tprint(f"PASSED speed boost: cPPs: {controller.accelerationStrategy.currentPps} last Speed: {speedBoosts[-1][0]}")
+        tprint("Restarting cycle.")
         if self.findSpeedJumpUpperLimit is None:
             controller.accelerationStrategy.doubleSpeedDelta()
             controller.accelerationStrategy.inferMaxPps()
-            print(f"Doubling Delta: new delta: {controller.accelerationStrategy.getSpeedDelta()}")
+            tprint(f"Doubling Delta: new delta: {controller.accelerationStrategy.getSpeedDelta()}")
         else:
             deltaDelta = (self.findSpeedJumpUpperLimit - controller.accelerationStrategy.getSpeedDelta()) / 2
             delta = round(controller.accelerationStrategy.getSpeedDelta() + deltaDelta)
-            print(f"New Delta: {delta}")
+            tprint(f"New Delta: {delta}")
             if deltaDelta >= self.minSpeedDelta:
                 controller.accelerationStrategy.setSpeedDelta(delta)
             else:
@@ -198,12 +198,12 @@ class Benchmark:
             controller, controller.accelerationStrategy.minPps, controller.accelerationStrategy.maxPps, speedBoosts)
 
     def failedSpeedBoost(self, controller, speedBoosts):
-        print(f"FAILED speed boost: cPPs: {controller.accelerationStrategy.currentPps} last Speed: {speedBoosts[-1][0]}")
-        print("Restarting cycle.")
+        tprint(f"FAILED speed boost: cPPs: {controller.accelerationStrategy.currentPps} last Speed: {speedBoosts[-1][0]}")
+        tprint("Restarting cycle.")
         lastHealthySpeedDelta = controller.accelerationStrategy.lastSpeedDelta
         self.findSpeedJumpUpperLimit = controller.accelerationStrategy.getSpeedDelta()
         delta = round(lastHealthySpeedDelta + (self.findSpeedJumpUpperLimit - lastHealthySpeedDelta) / 2)
-        print(f"new Limit: {self.findSpeedJumpUpperLimit}; newDelta: {delta}; prevDelta: {lastHealthySpeedDelta}")
+        tprint(f"new Limit: {self.findSpeedJumpUpperLimit}; newDelta: {delta}; prevDelta: {lastHealthySpeedDelta}")
         controller.accelerationStrategy.setSpeedDelta(delta, lastHealthySpeedDelta)
 
         self.findTransformations(
@@ -216,17 +216,17 @@ class Benchmark:
     def forcePickSpeedBoost(self, controller, speedBoosts, continueLooping=True):
         # Done
         self.findSpeedJumpUpperLimit = None
-        print("")
+        tprint("")
         # Truncating to 6 decimals
         boost = round(controller.accelerationStrategy.getSpeedDelta())
         controller.accelerationStrategy.resetMaxPps()
         if not self.speedDeltasSearchEnded:
             controller.accelerationStrategy.setSpeedDelta(self.minSpeedDelta, self.minSpeedDelta)
         speedBoosts = controller.accelerationStrategy.transformations
-        print(f"Found next speed boost of {boost}, for pps {speedBoosts[-2][0]}")
-        print(f"speedBoosts: {speedBoosts}")
-        print("")
-        print("")
+        tprint(f"Found next speed boost of {boost}, for pps {speedBoosts[-2][0]}")
+        tprint(f"speedBoosts: {speedBoosts}")
+        tprint("")
+        tprint("")
 
         if continueLooping:
             self.findTransformations(
@@ -237,7 +237,7 @@ class Benchmark:
     """
 
     def setPicked(self, controller, picked):
-        print("Enter pressed, setting picked True!!!")
+        tprint("Enter pressed, setting picked True!!!")
         picked['picked'] = True
         picked['pps'] = controller.accelerationStrategy.currentPps
         self.stopMotor(controller)
@@ -245,7 +245,7 @@ class Benchmark:
 
     def stopMotor(self, controller):
         if self.stoppingMotor():
-            print("skipping stopping motor a already stopping.")
+            tprint("skipping stopping motor a already stopping.")
             return
 
         self.stoppingMotor(True)
@@ -265,11 +265,11 @@ class Benchmark:
             self.lock.release()
 
     def resetStoppingFlag(self, currentPosition, targetPosition):
-        print(f"resetStoppingFlag: currentPosition: {currentPosition}, targetPosition: {targetPosition}")
+        tprint(f"resetStoppingFlag: currentPosition: {currentPosition}, targetPosition: {targetPosition}")
         if currentPosition == targetPosition:
-            print("Successfully stopped motor.")
-            print("Successfully stopped motor.")
-            print("")
+            tprint("Successfully stopped motor.")
+            tprint("Successfully stopped motor.")
+            tprint("")
             self.stoppingMotor(False)
 
     """
@@ -330,7 +330,7 @@ class Benchmark:
             raise RuntimeError("Need directionPin, StepPin to init Controller.")
 
         motor = GenericStepper(maxPps=Benchmark.ABSOLUTE_MIN_PPS, minPps=Benchmark.ABSOLUTE_MIN_PPS)
-        print("Benchmarking azimuth Motor")
+        tprint("Benchmarking azimuth Motor")
         Benchmark.initBenchmark(motor, int(args[0]), int(args[1]))
 
 

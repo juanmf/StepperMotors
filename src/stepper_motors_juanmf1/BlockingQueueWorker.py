@@ -4,11 +4,10 @@ import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, Future
 
-from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
-from src.stepper_motors_juanmf1.ThreadOrderedPrint import tprint, get_current_thread_info
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, get_current_thread_info
 
 
-_WORKERS: list[BlockingQueueWorker] = []
+_WORKERS: list['BlockingQueueWorker'] = []
 _WORKERS_LOCK = threading.Lock()
 
 class UsesSingleThreadedExecutor:
@@ -39,6 +38,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
         return chain
 
     def work(self, paramsList, block=False):
+        # Todo:evaluate use furture interface not just list.
         self.jobQueue.put(paramsList, block=block)
 
     def killWorker(self) -> 'BlockingQueueWorker.PoisonPill':
@@ -69,10 +69,10 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                 jobConsumer(*job)
                 self.jobQueue.task_done()
                 if isinstance(job, BlockingQueueWorker.Chain):
-                    print("BlockingQueueWorker.Chain")
-                    print("job")
-                    print(job)
-                    print("")
+                    tprint("BlockingQueueWorker.Chain")
+                    tprint("job")
+                    tprint(job)
+                    tprint("")
                     with self.lock:
                         job.completed = True
                         if job.getNext() is not None:
@@ -137,7 +137,7 @@ class ThreadPoolExecutorStackTraced(ThreadPoolExecutor):
         try:
             return fn(*args, **kwargs)
         except Exception as e:
-            print(e, traceback.format_exc())
+            tprint(e, traceback.format_exc())
             raise sys.exc_info()[0](traceback.format_exc())  # Creates an
             # exception of the
             # same type with the

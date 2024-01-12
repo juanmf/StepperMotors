@@ -7,7 +7,8 @@ from RPi import GPIO
 import pigpio
 import time
 
-from src.stepper_motors_juanmf1.myMath import sign
+from stepper_motors_juanmf1.myMath import sign
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 
 # Todo: migrate to https://pypi.org/project/python-periphery/
@@ -197,7 +198,7 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
     def setDirection(self, directionState):
         # Translating potential negative values to GPIO.LOW
         directionState = GPIO.HIGH if directionState == GPIO.HIGH else GPIO.LOW
-        print(f"Setting direction pin {self.directionGpioPin} {directionState}.")
+        tprint(f"Setting direction pin {self.directionGpioPin} {directionState}.")
         GPIO.output(self.directionGpioPin, directionState)
         self.currentDirection = directionState
 
@@ -290,5 +291,5 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
 
     def setSleepMode(self, sleepOn=False):
         state = GPIO.LOW if sleepOn else GPIO.HIGH
-        print(f"Setting Sleep pin {self.sleepGpioPin} to {state}")
+        tprint(f"Setting Sleep pin {self.sleepGpioPin} to {state}")
         GPIO.output(self.sleepGpioPin, state)

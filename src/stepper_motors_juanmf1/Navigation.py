@@ -1,6 +1,8 @@
 # Static or responsive/dynamic navigation implementations.
-from stepper_motors_juanmf1.myMath import cmp
 from RPi import GPIO
+from stepper_motors_juanmf1.myMath import cmp
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
+
 
 class Navigation:
     def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate):
@@ -8,10 +10,10 @@ class Navigation:
 
     @staticmethod
     def pulseController(controller):
-        # print(f"Setting step pin {controller.stepGpioPin} HIGH.")
+        # tprint(f"Setting step pin {controller.stepGpioPin} HIGH.")
         GPIO.output(controller.stepGpioPin, GPIO.HIGH)
         controller.usleep(controller.PULSE_TIME_MICROS)
-        # print(f"Setting step pin {controller.stepGpioPin} LOW.")
+        # tprint(f"Setting step pin {controller.stepGpioPin} LOW.")
         GPIO.output(controller.stepGpioPin, GPIO.LOW)
 
     @staticmethod
@@ -29,7 +31,7 @@ class StaticNavigation(Navigation):
             self.pulseController(controller)
 
             accelerationStrategy.computeSleepTimeUs(i, steps)
-            # print(f"Sleeping for {accelerationStrategy.currentSleepTimeUs} uS.")
+            # tprint(f"Sleeping for {accelerationStrategy.currentSleepTimeUs} uS.")
             controller.usleep(accelerationStrategy.currentSleepTimeUs)
             # fn should not consume many CPU instructions to avoid delays between steps.
             fn(controller.currentPosition, targetPosition, accelerationStrategy.realDirection)
@@ -49,7 +51,7 @@ class DynamicNavigation(Navigation):
         while not (controller.currentPosition == targetPosition and accelerationStrategy.canStop()):
             if interruptPredicate():
                 # Intentionally leave isRunning True
-                # print("Interrupting stepping job.")
+                # tprint("Interrupting stepping job.")
                 return
             # Direction is set in position based acceleration' state machine.
             controller.currentPosition = accelerationStrategy.computeSleepTimeUs(
@@ -57,13 +59,13 @@ class DynamicNavigation(Navigation):
 
             self.pulseController(controller)
 
-            # print(f"Driver's self.currentPosition: {controller.currentPosition}. targetPosition: {targetPosition}")
+            # tprint(f"Driver's self.currentPosition: {controller.currentPosition}. targetPosition: {targetPosition}")
             micros = accelerationStrategy.getCurrentSleepUs()
 
             controller.usleep(micros)
             # fn should not consume many CPU instructions to avoid delays between steps.
             fn(controller.currentPosition, targetPosition, accelerationStrategy.realDirection)
-            # print("")
+            # tprint("")
 
         # todo: check if still needed.
         accelerationStrategy.done()

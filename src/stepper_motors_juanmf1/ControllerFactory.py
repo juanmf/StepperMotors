@@ -6,7 +6,6 @@ from stepper_motors_juanmf1.AccelerationStrategy import (LinearAcceleration, Acc
 from stepper_motors_juanmf1.Controller import DRV8825MotorDriver
 from stepper_motors_juanmf1.Navigation import DynamicNavigation, StaticNavigation, Navigation
 
-
 class ControllerFactory:
     def getDelayPlanner(self) -> DelayPlanner:
         pass

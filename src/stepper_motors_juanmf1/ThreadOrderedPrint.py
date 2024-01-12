@@ -3,40 +3,39 @@ from io import StringIO
 import threading
 import _thread
 import sys
-import atexit
-import signal
+from datetime import datetime
 
-from src.stepper_motors_juanmf1 import BlockingQueueWorker
 
-_printStreams={}
-_interpreter=None
+_printStreams = {}
+_interpreter = None
 _globalPrintLock = threading.Lock()
 
+
 def tprint(*args, sep=' ', end='\n'):
+    # Complete timestamp would be "%Y-%m-%d %H:%M:%S.%f"
+    timestamp = datetime.now().strftime("%H:%M:%S.%f")
+    prefix = f"[{timestamp}]"
+    message = sep.join(map(str, args))
+
     thread_name, thread_id = get_current_thread_info()
-    key = f"{thread_id}-{thread_name}"
-    file = _printStreams.get(key, new_stream)
-    print(*args, sep=sep, end=end, file=file)
+    key = f"{thread_id}_{thread_name}"
+    file = _printStreams[key] if key in _printStreams else StringIO()
+    print(f"{prefix} {message}", end=end, file=file)
     with _globalPrintLock:
-        _printStreams.setdefault(thread_id, file)
+        _printStreams[key] = file
 
 
 def flush_streams():
     global _printStreams
-    for key, stream in enumerate(_printStreams):
+    for key, stream in _printStreams.items():
         # Print the contents to stdout
-        out = ("\n@start thread dump ========================================\n"
-               + key
-               + "\n===========================================================\n"
+        out = (f"\n@start thread dump {key} ========================================\n"
+               + "======================================================================\n"
                + stream.getvalue()
-               + "\n@end thread dump ==========================================\n")
+               + "\n@end thread dump =====================================================\n")
         print(out)
     with _globalPrintLock:
         _printStreams = {}
-
-
-def new_stream():
-    return StringIO()
 
 
 def get_current_thread_info():

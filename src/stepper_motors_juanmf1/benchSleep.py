@@ -1,12 +1,14 @@
 import time
 import numpy as np
 
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
+
 
 def mt(s):
     start = time.time()
     time.sleep(s)
     end = time.time()
-    print(f"slept {end - start} seconds")
+    tprint(f"slept {end - start} seconds")
     return end - start
 
 
@@ -20,7 +22,7 @@ def benchSleep(s):
     stddiff = np.std(diff)
     meanslept = np.mean(slept)
     stdslept = np.std(slept)
-    print(
+    tprint(
         f"Actual sleep differs by net avg {meandiff} or {100 * meandiff / s}%; with std dev {stddiff} or {100 * stddiff / s}%; ")
-    print(
+    tprint(
         f"Actual sleep differs by net avg {meanslept} or {100 * meanslept / s}%; with std dev {stdslept} or {100 * stdslept / s}%; ")
