@@ -387,6 +387,17 @@ $ git commit -am"last change description" && git push
 $ git pull
 $ rm ./dist/*
 $ python3 -m build
+* Creating venv isolated environment...
+* Installing packages in isolated environment... (RPi.GPIO, hatchling, numpy, pigpio, sshkeyboard)
+* Getting build dependencies for sdist...
+* Building sdist...
+* Building wheel from sdist
+* Creating venv isolated environment...
+* Installing packages in isolated environment... (RPi.GPIO, hatchling, numpy, pigpio, sshkeyboard)
+* Getting build dependencies for wheel...
+* Building wheel...
+Successfully built stepper_motors_juanmf1-0.0.7.tar.gz and stepper_motors_juanmf1-0.0.7-py3-none-any.whl
+
 
 # Next step I do from workstation if it fails from RPI. 
 # So optionally at workstation:
@@ -397,4 +408,7 @@ $ python3 -m twine upload --repository testpypi dist/*
 
 # then reinstall on RPI:
 $ pip install --upgrade -i https://test.pypi.org/simple/ stepper-motors-juanmf1
+
+# Alternatively can install on RPI directly from whl package, to test before uploading to Index.
+$ pip install --upgrade ./dist/stepper_motors_juanmf1-<latest>-py3-none-any.whl
 ```

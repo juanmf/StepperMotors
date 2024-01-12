@@ -55,6 +55,10 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                 jobConsumer(*job)
                 self.jobQueue.task_done()
                 if isinstance(job, BlockingQueueWorker.Chain):
+                    print("BlockingQueueWorker.Chain")
+                    print("job")
+                    print(job)
+                    print("")
                     with self.lock:
                         job.completed = True
                         if job.getNext() is not None:

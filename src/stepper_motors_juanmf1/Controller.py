@@ -139,7 +139,13 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         callable signature is expected as fn(currentPosition, targetPosition, realDirection)
         (realDirection from AccelerationStrategy)
         interruptibility is determined by Navigation instance injected at construction time.
+        :param direction: self.CW or self.CCW
+        :param steps: Number of steps, as we rely on direction, an error is raised if negative values are sent.
+        :param fn: callable to execute after each step. Contract:
+            fn(controller.currentPosition, targetPosition, accelerationStrategy.realDirection)
         """
+        if steps < 0:
+            raise RuntimeError("Can't handle negative steps. Use direction (self.CW or self.CCW) & steps > 0 properly.")
         signedDirection = 1 if direction == self.CW else -1
         targetPosition = self.currentPosition + (signedDirection * steps)
         self.isRunning = True
