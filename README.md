@@ -167,6 +167,16 @@ class MyRoboticArm:
     return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation)
 
 ```
+
+Alternative moveArm implementation verion >0.0.8:
+```Python
+def moveArm(self, elbowDelta, shoulderDelta, handDelta):
+    # moving the motors; encapsulating signed and zero delta logic in `signedSteps` 
+    self.elbow.signedSteps(elbowDelta, self.elbowPositionListener)
+    self.shoulder.signedSteps(shoulderDelta, self.shoulderPositionListener)
+    self.hand.signedSteps(handDelta, self.handPositionListener)
+        
+```
 #### ExponentialAcceleration
 
 In this example we use `ExponentialAcceleration`, which exponentially decreases increments as PPS goes up in a `RampingUp` 

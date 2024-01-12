@@ -7,6 +7,8 @@ from RPi import GPIO
 import pigpio
 import time
 
+from src.stepper_motors_juanmf1.myMath import sign
+
 
 # Todo: migrate to https://pypi.org/project/python-periphery/
 class BipolarStepperMotorDriver(BlockingQueueWorker):
@@ -25,20 +27,38 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
     # Mode pins are static, as they are shared among Turret motors.
     RESOLUTION = None
 
-    # Many sites will show 50% duty cycle from controller code. Drivers actually take short signal pulses.
     PULSE_TIME_MICROS = None
+    """
+    Many sites will show 50% duty cycle from controller code. Drivers actually take short signal pulses.
+    """
 
-    # Only tested with DRV8825 but LOW pulse is also possible on HIGH background.
+    SIGNED_STEPS_CALLABLES = {}
+    """
+    steps in direction aware functions like :func:`~stepClockWise` and :func:`~stepCounterClockWise` must be positive.
+    To alleviate client code burden, subclasses must define an association between signed steps and CW vs CCW.
+    :func:`~signedSteps` will pick the right callable (lambda to either :func:`~stepClockWise` or 
+    :func:`~stepCounterClockWise`) and send `abs(steps)` to it, consuming sign in the process.
+    see :func:`DRV8825MotorDriver.SIGNED_STEPS_CALLABLES` for an example.
+    Basically it should be 
+    `{-1: lambda _steps, _fn: self.stepCounterClockWise(_steps, _fn),
+      1: lambda _steps, _fn: self.stepClockWise(_steps, _fn)}` or otherwise. 
+    """
+
     PULSE_STATE = None
+    """
+    Only tested with DRV8825 but LOW pulse is also possible on HIGH background.
+    """
 
-    # Connect to pigpiod daemon
-    # TODO: use -s option to mode 10 $> sudo pigpiod -s 10 -t 0
-    #    Go back to steps per ramp level waveforms if steps are missed.
-    #    "if you can control multiple stepper motors.The short answer is yes but it depends on the type of
-    #    precision and timing you need.For example CNC or 3D printing would probably require a dedicated controller.
-    #    Please take a look at PyCNC.Otherwise, you are only limited by the number of available GPIO pins.
     pi = pigpio.pi()
-
+    """
+    Connect to pigpiod daemon
+    # Todo: check that "-s" still applies. think it was important for PWM(), not used now.
+    Important: use -s option to mode 10 $> sudo pigpiod -s 10 -t 0 (or find the right -s <number>)
+    Go back to steps per ramp level waveforms if steps are missed.
+    "if you can control multiple stepper motors.The short answer is yes but it depends on the type of
+    precision and timing you need.For example CNC or 3D printing would probably require a dedicated controller.
+    Please take a look at PyCNC. Otherwise, you are only limited by the number of available GPIO pins.
+    """
 
     def __init__(self,
                  stepperMotor: StepperMotor,
@@ -165,6 +185,9 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
     def isInterrupted(self):
         return self.jobQueue.qsize() > 0
 
+    def signedSteps(self, steps, fn):
+        self.SIGNED_STEPS_CALLABLES.get(sign(steps), lambda _steps, _fn: None)(abs(steps), fn)
+
     def stepClockWise(self, steps, fn):
         self.jobQueue.put([self.CW, steps, fn], block=True)
 
@@ -234,7 +257,7 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
     # Raspberry Pi sleeps (in % of desired time) increasingly longer the lower the time goes.
     # So in actuality this will sleep about 20uS
     PULSE_TIME_MICROS = 50
-
+    SIGNED_STEPS_CALLABLES = {}
     # DRV8825 Uses HIGH pulse on LOW background for STEP signal.
     PULSE_STATE = GPIO.HIGH
 
@@ -261,6 +284,9 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         super().__init__(stepperMotor, accelerationStrategy, directionGpioPin, stepGpioPin, navigation,
                          sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
                          emergencyStopGpioPin=emergencyStopGpioPin)
+        self.SIGNED_STEPS_CALLABLES = {-1: lambda _steps, _fn: self.stepCounterClockWise(_steps, _fn),
+                                        1: lambda _steps, _fn: self.stepClockWise(_steps, _fn)}
+
 
     def setSleepMode(self, sleepOn=False):
         state = GPIO.LOW if sleepOn else GPIO.HIGH

@@ -2,8 +2,14 @@ import queue
 import sys
 import threading
 import traceback
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, Future
 
+from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
+from src.stepper_motors_juanmf1.ThreadOrderedPrint import tprint, get_current_thread_info
+
+
+_WORKERS: list[BlockingQueueWorker] = []
+_WORKERS_LOCK = threading.Lock()
 
 class UsesSingleThreadedExecutor:
     def __init__(self):
@@ -15,13 +21,17 @@ class UsesSingleThreadedExecutor:
 
 class BlockingQueueWorker(UsesSingleThreadedExecutor):
 
-    def __init__(self, jobConsumer, jobQueueMaxSize=2):
+    def __init__(self, jobConsumer, jobQueueMaxSize=2, workerName="John Doe Worker"):
         super().__init__()
+        self.workerName = workerName
+        self.workerThread = None
         self.workerAtWork = False
         self.lock = threading.Lock()
         self.jobQueueMaxSize = jobQueueMaxSize
         self.jobQueue = queue.Queue(self.jobQueueMaxSize)
-        self.startWorker(jobConsumer)
+        self.workerFuture = self.startWorker(jobConsumer)
+        with _WORKERS_LOCK:
+            _WORKERS.append(self)
 
     def workChain(self, paramsList, block=False) -> 'BlockingQueueWorker.Chain':
         chain = BlockingQueueWorker.Chain(self, paramsList=paramsList)
@@ -31,16 +41,19 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
     def work(self, paramsList, block=False):
         self.jobQueue.put(paramsList, block=block)
 
-    def killWorker(self):
-        self.jobQueue.put(BlockingQueueWorker.PoisonPill([]), block=True)
+    def killWorker(self) -> 'BlockingQueueWorker.PoisonPill':
+        pill = BlockingQueueWorker.PoisonPill([])
+        self.jobQueue.put(pill, block=True)
+        return pill
 
-    def startWorker(self, jobConsumer):
+    def startWorker(self, jobConsumer) -> Future:
         if self.workerAtWork:
             raise RuntimeError("There is already a worker at work.")
-        self.executor.submit(lambda: self.consumer(jobConsumer))
+        return self.executor.submit(lambda: self.consumer(jobConsumer))
 
     def consumer(self, jobConsumer):
         # execute job in dedicated thread.
+        self.workerThread = get_current_thread_info()
         try:
             with self.lock:
                 self.workerAtWork = True
@@ -50,6 +63,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                 job = self.jobQueue.get(block=True)
                 if isinstance(job, BlockingQueueWorker.PoisonPill):
                     self.jobQueue.task_done()
+                    job.isSwallowed(True)
                     return
 
                 jobConsumer(*job)
@@ -67,6 +81,13 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
         finally:
             with self.lock:
                 self.workerAtWork = False
+
+    def __str__(self):
+        # thread_id = threading.current_thread().ident
+
+        return (f"BlockingQueueWorker {self.workerName} with jobList probable len {self.jobQueue.qsize()} \n"
+                f"jobList max len {self.jobQueue.maxsize}"
+                f"worker thread ({self.workerThread})")
 
     class Chain(list):
         def __init__(self, worker: 'BlockingQueueWorker', *, paramsList: list = None, prev: 'BlockingQueueWorker.Chain' = None):
@@ -89,9 +110,15 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
         def getPrev(self):
             return self._prev
 
-
     class PoisonPill(list):
-        pass
+        def __init__(self, worker: 'BlockingQueueWorker', *, paramsList: list = None):
+            super().__init__([] if paramsList is None else paramsList)
+            self._isSwallowed = False
+
+        def isSwallowed(self, value=None):
+            if value is None:
+                return self._isSwallowed
+            self._isSwallowed = value
 
 
 class ThreadPoolExecutorStackTraced(ThreadPoolExecutor):
@@ -116,3 +143,18 @@ class ThreadPoolExecutorStackTraced(ThreadPoolExecutor):
             # same type with the
             # traceback as
             # message
+
+
+def killWorkers():
+    """
+    kills all workers when program tears down.
+    """
+
+    workerPills = []
+    for worker in _WORKERS:
+        workerPills.append((worker.workerFuture, worker.killWorker()))
+
+    for index, (workerFuture, pill) in enumerate(workerPills):
+        workerFuture.result()
+        if not pill.isSwallowed():
+            tprint(f"Worker died of other causes. {_WORKERS[index]}")
