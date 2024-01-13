@@ -13,6 +13,7 @@ from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 # Todo: migrate to https://pypi.org/project/python-periphery/
 class BipolarStepperMotorDriver(BlockingQueueWorker):
+    INSTANCES_COUNT = 0
     """
     Bipolar stepper motor driver abstract implementation.
     Uses a dedicated thread to handle pulses to driver hardware in a non-blocking fashion.
@@ -100,7 +101,9 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         [GND]       39 * * 40 [GPIO_21]
         """
         super().__init__(self._operateStepper, jobQueueMaxSize=2,
-                         workerName=f"{self.__class__.__name__}_" if workerName is None else workerName)
+                         workerName=f"{self.__class__.__name__}_{BipolarStepperMotorDriver.INSTANCES_COUNT}_"
+                         if workerName is None else workerName)
+        BipolarStepperMotorDriver.INSTANCES_COUNT += 1
         self.stepperMotor = stepperMotor
         self.accelerationStrategy = accelerationStrategy
         self.emergencyStopGpioPin = emergencyStopGpioPin
@@ -289,7 +292,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                          emergencyStopGpioPin=emergencyStopGpioPin)
         self.SIGNED_STEPS_CALLABLES = {-1: lambda _steps, _fn: self.stepCounterClockWise(_steps, _fn),
                                         1: lambda _steps, _fn: self.stepClockWise(_steps, _fn)}
-
 
     def setSleepMode(self, sleepOn=False):
         state = GPIO.LOW if sleepOn else GPIO.HIGH
