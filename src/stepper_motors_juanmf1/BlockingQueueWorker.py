@@ -20,7 +20,7 @@ class UsesSingleThreadedExecutor:
 
 class BlockingQueueWorker(UsesSingleThreadedExecutor):
 
-    def __init__(self, jobConsumer, jobQueueMaxSize=2, workerName="John_Doe_Worker"):
+    def __init__(self, jobConsumer, *, jobQueueMaxSize=2, workerName="John_Doe_Worker"):
         super().__init__(workerName)
         self.workerName = workerName
         self.workerThread = None

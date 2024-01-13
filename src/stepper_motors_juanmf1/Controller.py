@@ -70,7 +70,8 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
                  sleepGpioPin=None,
                  stepsMode="Full",
                  modeGpioPins=None,
-                 emergencyStopGpioPin=None):
+                 emergencyStopGpioPin=None,
+                 workerName=None):
         """
         Multiple drivers could share the same mode pins (assuming current supply from pin is enough,
         and the drivers' mode pins are bridged same to same)
@@ -98,7 +99,8 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         [GPIO_26]   37 * * 38 [GPIO_20]
         [GND]       39 * * 40 [GPIO_21]
         """
-        super().__init__(self._operateStepper)
+        super().__init__(self._operateStepper, jobQueueMaxSize=2,
+                         workerName=f"{self.__class__.__name__}_" if workerName is None else workerName)
         self.stepperMotor = stepperMotor
         self.accelerationStrategy = accelerationStrategy
         self.emergencyStopGpioPin = emergencyStopGpioPin
