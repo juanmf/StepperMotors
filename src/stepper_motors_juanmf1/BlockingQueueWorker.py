@@ -11,8 +11,8 @@ _WORKERS: list['BlockingQueueWorker'] = []
 _WORKERS_LOCK = threading.Lock()
 
 class UsesSingleThreadedExecutor:
-    def __init__(self):
-        self.executor = ThreadPoolExecutorStackTraced(1)
+    def __init__(self, threadPrefix=""):
+        self.executor = ThreadPoolExecutorStackTraced(1, thread_name_prefix=threadPrefix)
 
     def __del__(self):
         self.executor.shutdown(wait=False, cancel_futures=True)
@@ -20,8 +20,8 @@ class UsesSingleThreadedExecutor:
 
 class BlockingQueueWorker(UsesSingleThreadedExecutor):
 
-    def __init__(self, jobConsumer, jobQueueMaxSize=2, workerName="John Doe Worker"):
-        super().__init__()
+    def __init__(self, jobConsumer, jobQueueMaxSize=2, workerName="John_Doe_Worker"):
+        super().__init__(workerName)
         self.workerName = workerName
         self.workerThread = None
         self.workerAtWork = False
