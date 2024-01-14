@@ -557,7 +557,7 @@ class DynamicDelayPlanner(DelayPlanner):
     def done(self):
         self.currentState = DynamicDelayPlanner.Rest()
 
-    # State machine to represent transitions between [rest, steady, rampingUp, rampingDown] in dynamic
+    # State machine to represent transitions between [rest, steady, `rampingUp, rampingDown] in dynamic
     # (position based) acceleration.
     class State:
         """

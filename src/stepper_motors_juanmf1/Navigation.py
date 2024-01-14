@@ -50,8 +50,7 @@ class DynamicNavigation(Navigation):
         # Can cross targetPosition with some speed > 0, that's not a final state.
         while not (controller.currentPosition == targetPosition and accelerationStrategy.canStop()):
             if interruptPredicate():
-                # Intentionally leave isRunning True
-                # tprint("Interrupting stepping job.")
+                tprint("Interrupting stepping job.")
                 return
             # Direction is set in position based acceleration' state machine.
             controller.currentPosition = accelerationStrategy.computeSleepTimeUs(
@@ -69,6 +68,8 @@ class DynamicNavigation(Navigation):
 
         # todo: check if still needed.
         accelerationStrategy.done()
+        # Todo: GPIO.LOW is not controller specific. fix with controller.setDirection(controller.defaultDirection)
+        #  or similar
         controller.setDirection(GPIO.LOW)
 
     @staticmethod

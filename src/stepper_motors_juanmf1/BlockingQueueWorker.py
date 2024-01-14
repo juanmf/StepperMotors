@@ -33,13 +33,32 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
             _WORKERS.append(self)
 
     def workChain(self, paramsList, block=False) -> 'BlockingQueueWorker.Chain':
+        """
+        Individual chain links will have a future, same kind returned by self.work(). But these futures will be
+        completed in LIFO order (Last In First Out.) So when the future associated with this root level Chain is
+        completed, the whole Chain is done.
+        @param paramsList: list of arguments to pass down your job handler fn.
+        @param block: If you'd like your producer to block on full queues.
+        @return: a BlockingQueueWorker.Chain instance representing the root level of a new chain of work that will be
+        sequentially consumed.
+        """
         chain = BlockingQueueWorker.Chain(self, paramsList=paramsList)
-        self.work(chain, block=block)
+        chain.future = self.work(chain, block=block)
         return chain
 
     def work(self, paramsList, block=False):
+        """
+        Adds you parameters, to be sent by executor to your handler fn in dedicated thread.
+        @param paramsList:
+        @param block:
+        @return: a Future that will be completed when your fn returns, with paramsList as value future.result().
+        If your fn raise errors the future.exception() will contain infor about it.
+        """
+        future = Future()
+        paramsList.append(future)
         # Todo:evaluate use furture interface not just list.
         self.jobQueue.put(paramsList, block=block)
+        return future
 
     def killWorker(self) -> 'BlockingQueueWorker.PoisonPill':
         pill = BlockingQueueWorker.PoisonPill([])
@@ -54,6 +73,8 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
     def consumer(self, jobConsumer):
         # execute job in dedicated thread.
         self.workerThread = get_current_thread_info()
+        job = None
+        future = None
         try:
             with self.lock:
                 self.workerAtWork = True
@@ -61,23 +82,23 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
             while True:
                 # Block until movement job is sent our way.
                 job = self.jobQueue.get(block=True)
+                future = job.pop()
                 if isinstance(job, BlockingQueueWorker.PoisonPill):
-                    self.jobQueue.task_done()
+                    future.set_result(True)
                     job.isSwallowed(True)
+                    self.jobQueue.task_done()
                     return
 
                 jobConsumer(*job)
                 self.jobQueue.task_done()
                 if isinstance(job, BlockingQueueWorker.Chain):
-                    tprint("BlockingQueueWorker.Chain")
-                    tprint("job")
-                    tprint(job)
-                    tprint("")
-                    with self.lock:
-                        job.completed = True
-                        if job.getNext() is not None:
-                            # consumer thread producing, can't block!
-                            self.work(job.getNext(), block=False)
+                    self._handleChainOfWork(job)
+                else:
+                    future.set_result(job)
+        except Exception as e:
+            throw = RuntimeError("Worker job failed.", job, e)
+            future.set_exception(throw)
+            tprint(f"Swallowing exception in worker {self.workerThread}; job: {throw}")
         finally:
             with self.lock:
                 self.workerAtWork = False
@@ -90,12 +111,14 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                 f"worker thread ({self.workerThread})")
 
     class Chain(list):
-        def __init__(self, worker: 'BlockingQueueWorker', *, paramsList: list = None, prev: 'BlockingQueueWorker.Chain' = None):
+        def __init__(self, worker: 'BlockingQueueWorker', *, paramsList: list = None,
+                     prev: 'BlockingQueueWorker.Chain' = None):
             super().__init__([] if paramsList is None else paramsList)
             self._next = None
             self._prev = paramsList if prev is None and isinstance(paramsList, BlockingQueueWorker.Chain) else prev
             self.completed = False
             self.worker = worker
+            self.future = None
 
         def then(self, paramsList):
             self._next = BlockingQueueWorker.Chain(self.worker, paramsList=paramsList, prev=self)
@@ -119,6 +142,25 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
             if value is None:
                 return self._isSwallowed
             self._isSwallowed = value
+
+    def _handleChainOfWork(self, job):
+        tprint("BlockingQueueWorker.Chain")
+        tprint("job")
+        tprint(job)
+        tprint("")
+        with self.lock:
+            job.completed = True
+            if job.getNext() is not None:
+                # consumer thread producing, can't block!
+                nextChainLink = job.getNext()
+                nextFuture = self.work(nextChainLink, block=False)
+                nextChainLink.future = nextFuture
+            else:
+                # Complete future chain. Completing futures in reverse order.
+                jobLink = job
+                while jobLink is not None:
+                    jobLink.future.set_result(jobLink)
+                    jobLink = jobLink.getPrev()
 
 
 class ThreadPoolExecutorStackTraced(ThreadPoolExecutor):

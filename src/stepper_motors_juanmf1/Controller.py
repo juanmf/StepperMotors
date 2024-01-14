@@ -1,12 +1,12 @@
-import queue
+from concurrent.futures import Future
+import time
+
+from RPi import GPIO
+import pigpio
 
 from stepper_motors_juanmf1.AccelerationStrategy import AccelerationStrategy
 from stepper_motors_juanmf1.StepperMotor import StepperMotor
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
-from RPi import GPIO
-import pigpio
-import time
-
 from stepper_motors_juanmf1.myMath import sign
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
@@ -192,13 +192,13 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         return self.jobQueue.qsize() > 0
 
     def signedSteps(self, steps, fn):
-        self.SIGNED_STEPS_CALLABLES.get(sign(steps), lambda _steps, _fn: None)(abs(steps), fn)
+        return self.SIGNED_STEPS_CALLABLES.get(sign(steps), lambda _steps, _fn: None)(abs(steps), fn)
 
     def stepClockWise(self, steps, fn):
-        self.jobQueue.put([self.CW, steps, fn], block=True)
+        return self.work([self.CW, steps, fn], block=True)
 
     def stepCounterClockWise(self, steps, fn):
-        self.jobQueue.put([self.CCW, steps, fn], block=True)
+        return self.work([self.CCW, steps, fn], block=True)
 
     def setDirection(self, directionState):
         # Translating potential negative values to GPIO.LOW
