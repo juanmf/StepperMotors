@@ -86,7 +86,7 @@ class PG35S_D48_HHC2(StepperMotor):
     TORQUE_CHARACTERISTICS = [(200, 300), (500, 200), (700, 100), (800, 50), (850, 25), (875, 25), (900, 1)]
     """
     # TORQUE_CHARACTERISTICS = [(180.0, 320), (500.0, 240), (740.0, 205), (945.0, 0)]
-    TORQUE_CHARACTERISTICS = [(205, 300), (505, 200), (705, 100), (805, 55), (860, 0)]
+    TORQUE_CHARACTERISTICS = [(200, 150), (350, 200), (550, 100), (650, 100), (750, 80), (830, 20), (850, 0)]
 
     """
     Steps per Revolution with 1.8 deg per step

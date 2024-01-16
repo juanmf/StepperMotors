@@ -24,14 +24,18 @@ def tprint(*args, sep=' ', end='\n'):
 
 def flush_streams():
     global _printStreams
+    out = ""
     for thread_name, messages in _printStreams.items():
         # Print the contents to stdout
-        out = (f"\n@start thread dump {thread_name} ========================================\n"
+        out += (f"\n@start thread dump {thread_name} ========================================\n"
                + "==========================================================================\n"
                + "\n".join([f"[{datetime.fromtimestamp(timestamp / 1e6).strftime('%H:%M:%S.%f')}] "
                             f"{message}" for timestamp, message in messages.items()])
-               + "\n@end thread dump =======================================================\n")
-        print(out)
+               + f"\n@end thread dump {thread_name} =========================================\n")
+    out += ("\n===================================================================================\n"
+            + "Thread prints Dump Complete =======================================================\n")
+
+    print(out)
     with _globalPrintLock:
         _printStreams = {}
 

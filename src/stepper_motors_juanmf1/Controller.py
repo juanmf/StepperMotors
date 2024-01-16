@@ -189,7 +189,7 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         self.isRunning = False
 
     def isInterrupted(self):
-        return self.jobQueue.qsize() > 0
+        return self.hasQueuedJobs()
 
     def signedSteps(self, steps, fn):
         return self.SIGNED_STEPS_CALLABLES.get(sign(steps), lambda _steps, _fn: None)(abs(steps), fn)
