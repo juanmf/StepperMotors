@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from concurrent.futures import Future
 import time
 
@@ -71,8 +72,9 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
                  sleepGpioPin=None,
                  stepsMode="Full",
                  modeGpioPins=None,
-                 emergencyStopGpioPin=None,
-                 workerName=None):
+                 enableGpioPin=None,
+                 workerName=None,
+                 useHoldingTorque=None):
         """
         Multiple drivers could share the same mode pins (assuming current supply from pin is enough,
         and the drivers' mode pins are bridged same to same)
@@ -106,7 +108,7 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         BipolarStepperMotorDriver.INSTANCES_COUNT += 1
         self.stepperMotor = stepperMotor
         self.accelerationStrategy = accelerationStrategy
-        self.emergencyStopGpioPin = emergencyStopGpioPin
+        self.enableGpioPin = enableGpioPin
         self.modeGpioPins = modeGpioPins  # Microstep Resolution GPIO Pins
         self.stepsMode = stepsMode
         self.sleepGpioPin = sleepGpioPin
@@ -119,10 +121,12 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         self.currentDirection = None
 
         self.isRunning = False
-        # False means no current when no stepping. True sends current for holding Torque.
-        self.useHoldingTorque = True  # sleepGpioPin is None
 
-        self.emergencyStopGpioPin = emergencyStopGpioPin
+        # False means no current when no stepping. True sends current for holding Torque.
+        # sleepGpioPin and enableGpioPin can be set by hardware, if provided a GPIO they are used to save power
+        # unless overriden by useHoldingTorque
+        self.useHoldingTorque = useHoldingTorque if useHoldingTorque is not None else sleepGpioPin or enableGpioPin
+
         self._initGpio(stepsMode)
 
         # Todo: libc.usleep fails on my RPI. see `self.usleep()`
@@ -137,9 +141,9 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         GPIO.setup(self.stepGpioPin, GPIO.OUT)
         GPIO.output(self.stepGpioPin, GPIO.LOW)
 
-        if self.emergencyStopGpioPin is not None:
-            GPIO.setup(self.emergencyStopGpioPin, GPIO.OUT)
-            GPIO.output(self.emergencyStopGpioPin, GPIO.LOW)
+        if self.enableGpioPin is not None:
+            GPIO.setup(self.enableGpioPin, GPIO.OUT)
+            self.setEnableMode()
 
     def _oneTimeInit(self, stepsMode):
         if not BipolarStepperMotorDriver.INITIALIZED:
@@ -178,6 +182,7 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
 
         if not self.useHoldingTorque:
             self.setSleepMode(sleepOn=False)
+            self.setEnableMode(enableOn=True)
 
         self.navigation.go(self, targetPosition, self.accelerationStrategy, fn, self.isInterrupted)
         if self.navigation.isInterruptible() and self.isInterrupted():
@@ -185,6 +190,7 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
 
         if not self.useHoldingTorque:
             self.setSleepMode(sleepOn=True)
+            self.setEnableMode(enableOn=False)
 
         self.isRunning = False
 
@@ -234,7 +240,12 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
             # overhead in your platform.
             time.sleep(micros / 1_000_000)
 
+    @abstractmethod
     def setSleepMode(self, sleepOn):
+        pass
+
+    @abstractmethod
+    def setEnableMode(self, enableOn=True):
         pass
 
 
@@ -267,33 +278,66 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
     # DRV8825 Uses HIGH pulse on LOW background for STEP signal.
     PULSE_STATE = GPIO.HIGH
 
-    # DRIVER PINOUT: [EN??] & [FLT] unused
-    #
-    # [EN??]   1  *   *  9 [VMOT] DANGER, VOLTAGE MOTOR KEEP AWAY FROM RaspberryPi // VMOT bridged with capacitor to GND
-    # [MODE_0] 2  *   * 10 [GND] // MODE_0 -> modeGpioPins[0]
-    # [MODE_1] 3  *   * 11 [B2] // MODE_1 -> modeGpioPins[1] // B2 & B1 to same coil in motor
-    # [MODE_2] 4  *   * 12 [B1] // MODE_2 -> modeGpioPins[2]
-    # [RST]    5  *   * 13 [A1] // A1 & A2 to same coil in motor  // RST & SLP to [3v3 Power] in Pi
-    # [SLP]    6  *   * 14 [A2]
-    # [STP]    7  *   * 15 [FLT] // STP -> stepGpioPin in Raspberry
-    # [DIR]    8  *   * 16 [GND] // DIR -> directionGpioPin in Raspberry // GND to GND in pi
+
     def __init__(self,
                  stepperMotor: StepperMotor,
                  accelerationStrategy: AccelerationStrategy,
                  directionGpioPin,
                  stepGpioPin,
                  navigation,
-                 sleepGpioPin=None,
+                 sleepGpioPin=None,  # LOW = sleep mode; HIGH = chip active
                  stepsMode="Full",
                  modeGpioPins=None,
-                 emergencyStopGpioPin=None):
+                 # LOW = enabled; HIGH chip disabled
+                 enableGpioPin=None):
+        """
+        DRIVER PINOUT: [EN??] & [FLT] unused
+
+        [EN]     1  *   *  9 [VMOT] DANGER, VOLTAGE MOTOR KEEP AWAY FROM RaspberryPi // VMOT bridged with capacitor to GND
+        [MODE_0] 2  *   * 10 [GND] // MODE_0 -> modeGpioPins[0]
+        [MODE_1] 3  *   * 11 [B2] // MODE_1 -> modeGpioPins[1] // B2 & B1 to same coil in motor
+        [MODE_2] 4  *   * 12 [B1] // MODE_2 -> modeGpioPins[2]
+        [RST]    5  *   * 13 [A1] // A1 & A2 to same coil in motor  // RST & SLP to [3v3 Power] in Pi
+        [SLP]    6  *   * 14 [A2]
+        [STP]    7  *   * 15 [FLT] // STP -> stepGpioPin in Raspberry
+        [DIR]    8  *   * 16 [GND] // DIR -> directionGpioPin in Raspberry // GND to GND in pi
+
+        @param stepperMotor:
+        @param accelerationStrategy:
+        @param directionGpioPin:
+        @param stepGpioPin:
+        @param navigation:
+        @param sleepGpioPin:
+        @param stepsMode: [STP]
+        @param modeGpioPins: [MODE_0..2]
+        @param enableGpioPin: [EN] LOW = enabled; HIGH chip disabled
+        """
         super().__init__(stepperMotor, accelerationStrategy, directionGpioPin, stepGpioPin, navigation,
                          sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
-                         emergencyStopGpioPin=emergencyStopGpioPin)
+                         enableGpioPin=enableGpioPin)
         self.SIGNED_STEPS_CALLABLES = {-1: lambda _steps, _fn: self.stepCounterClockWise(_steps, _fn),
                                         1: lambda _steps, _fn: self.stepClockWise(_steps, _fn)}
 
     def setSleepMode(self, sleepOn=False):
+        """
+        Active LOW, so if sleepOn True, pin is LOW. if sleepOn False, pin is HIGH.
+        @param sleepOn: True puts chip to sleep. reducing power consumption to a minimum. You can use this to save
+        power, especially when the motor is not in use.
+        """
+        if self.sleepGpioPin is None:
+            return
         state = GPIO.LOW if sleepOn else GPIO.HIGH
         tprint(f"Setting Sleep pin {self.sleepGpioPin} to {state}")
         GPIO.output(self.sleepGpioPin, state)
+
+    def setEnableMode(self, enableOn=True):
+        """
+        Active LOW, so if enableOn True, pin is LOW. if enableOn False, pin is HIGH.
+        @param enableOn: enable or disable the driver chip.  This pin is particularly useful when implementing an
+        emergency stop or shutdown system. Although some integrated circuits like RPI Hats will use this for sleep.
+        """
+        if self.enableGpioPin is None:
+            return
+        state = GPIO.LOW if enableOn else GPIO.HIGH
+        tprint(f"Setting Enabled pin {self.enableGpioPin} to {state}")
+        GPIO.output(self.enableGpioPin, state)
