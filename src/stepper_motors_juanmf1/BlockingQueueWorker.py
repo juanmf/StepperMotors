@@ -150,13 +150,13 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                 tprint(f"Job Futures Done when trying to set exception. Job:{self}.")
 
         def start(self):
-            startTime = time.time_ns()
+            startTime = time.monotonic_ns()
             self.startTime.set_result(startTime)
             return startTime
 
         def end(self):
-            endTime = time.time_ns()
-            self.endTime.set_result(time.time_ns())
+            endTime = time.monotonic_ns()
+            self.endTime.set_result(time.monotonic_ns())
             return endTime
 
         def result(self):
@@ -212,7 +212,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
             if value is None:
                 return self._isSwallowed
             self._isSwallowed = value
-            doneTime = time.time_ns()
+            doneTime = time.monotonic_ns()
             self.startTime.set_result(doneTime)
             self.endTime.set_result(doneTime)
 
