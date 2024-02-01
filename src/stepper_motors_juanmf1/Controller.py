@@ -241,7 +241,7 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
             time.sleep(micros / 1_000_000)
 
     @abstractmethod
-    def setSleepMode(self, sleepOn):
+    def setSleepMode(self, sleepOn=False):
         pass
 
     @abstractmethod
@@ -285,7 +285,8 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                  directionGpioPin,
                  stepGpioPin,
                  navigation,
-                 sleepGpioPin=None,  # LOW = sleep mode; HIGH = chip active
+                 # LOW = sleep mode; HIGH = chip active
+                 sleepGpioPin=None,
                  stepsMode="Full",
                  modeGpioPins=None,
                  # LOW = enabled; HIGH chip disabled
@@ -317,6 +318,8 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                          enableGpioPin=enableGpioPin)
         self.SIGNED_STEPS_CALLABLES = {-1: lambda _steps, _fn: self.stepCounterClockWise(_steps, _fn),
                                         1: lambda _steps, _fn: self.stepClockWise(_steps, _fn)}
+        tprint(f"sleepPin: {self.sleepGpioPin}.")
+        tprint(f"useHOldingToruqe: {self.useHoldingTorque}")
 
     def setSleepMode(self, sleepOn=False):
         """
@@ -324,6 +327,7 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         @param sleepOn: True puts chip to sleep. reducing power consumption to a minimum. You can use this to save
         power, especially when the motor is not in use.
         """
+        tprint(f"self.sleepGpioPin is None {self.sleepGpioPin is None}")
         if self.sleepGpioPin is None:
             return
         state = GPIO.LOW if sleepOn else GPIO.HIGH

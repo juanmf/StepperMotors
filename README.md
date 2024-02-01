@@ -260,7 +260,7 @@ start gpio demon on your Raspberry Pi and start benchmark passing step and direc
 ```
 $ cd src/stepper_motors_juanmf1
 $ sudo pigpiod -s 10 -t 0
-$ python3 python3 Benchmark.py 23 24
+$ python3 Benchmark.py 23 24
 
 # you can use `netstat netstat -tulpn` to check pigpiod demon 
 #  is listening, in my case on `tcp6       0      0 :::8888` 
