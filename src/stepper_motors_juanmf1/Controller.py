@@ -1,3 +1,4 @@
+import threading
 from abc import abstractmethod
 from concurrent.futures import Future
 import time
@@ -14,6 +15,7 @@ from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 # Todo: migrate to https://pypi.org/project/python-periphery/
 class BipolarStepperMotorDriver(BlockingQueueWorker):
+    LOCK = threading.Lock()
     INSTANCES_COUNT = 0
     """
     Bipolar stepper motor driver abstract implementation.
@@ -125,7 +127,9 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         # False means no current when no stepping. True sends current for holding Torque.
         # sleepGpioPin and enableGpioPin can be set by hardware, if provided a GPIO they are used to save power
         # unless overriden by useHoldingTorque
-        self.useHoldingTorque = useHoldingTorque if useHoldingTorque is not None else sleepGpioPin or enableGpioPin
+        # Never sleeps/disable
+        self.useHoldingTorque = useHoldingTorque if useHoldingTorque is not None \
+            else (sleepGpioPin or enableGpioPin) is None
 
         self._initGpio(stepsMode)
 
@@ -133,7 +137,7 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         # self.libc = ctypes.CDLL('libc.so.6')
 
     def _initGpio(self, stepsMode):
-        self._oneTimeInit(stepsMode)
+        self._oneTimeInit()
 
         GPIO.setup(self.directionGpioPin, GPIO.OUT)
         self.setDirection(GPIO.LOW)
@@ -145,23 +149,22 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
             GPIO.setup(self.enableGpioPin, GPIO.OUT)
             self.setEnableMode()
 
-    def _oneTimeInit(self, stepsMode):
-        if not BipolarStepperMotorDriver.INITIALIZED:
-            GPIO.setmode(GPIO.BCM)
+        if self.sleepGpioPin is not None:
+            GPIO.setup(self.sleepGpioPin, GPIO.OUT)
+            self.setSleepMode()
 
-        # Todo: check we can call setup before GPIO.setmode(GPIO.BCM)
         if self.modeGpioPins is not None:
             GPIO.setup(self.modeGpioPins, GPIO.OUT)
+            for i in range(3):
+                self.pi.write(self.modeGpioPins[i], self.RESOLUTION[stepsMode][i])
 
-        if BipolarStepperMotorDriver.INITIALIZED:
-            return
+    def _oneTimeInit(self):
+        with self.LOCK:
+            if BipolarStepperMotorDriver.INITIALIZED:
+                return
 
-        BipolarStepperMotorDriver.INITIALIZED = True
-        if self.modeGpioPins is None:
-            return
-
-        for i in range(3):
-            self.pi.write(self.modeGpioPins[i], self.RESOLUTION[stepsMode][i])
+            BipolarStepperMotorDriver.INITIALIZED = True
+            GPIO.setmode(GPIO.BCM)
 
     def _operateStepper(self, direction, steps, fn):
         """
@@ -181,6 +184,7 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         self.isRunning = True
 
         if not self.useHoldingTorque:
+            tprint(f"Waking! Calling setSleepMode with sleepOn=False")
             self.setSleepMode(sleepOn=False)
             self.setEnableMode(enableOn=True)
 
