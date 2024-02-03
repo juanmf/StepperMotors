@@ -6,14 +6,15 @@ from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 class EventDispatcher(BlockingQueueWorker):
     MAX_EVENTS = 100
+    _instance = None
 
     def __new__(cls, *args, **kwargs):
         """
         Singleton
         """
-        if not hasattr(cls, 'instance'):
-            cls.instance = super().__new__(cls)
-        return cls.instance
+        if not cls._instance:
+            cls._instance = super(EventDispatcher, cls).__new__(cls, *args, **kwargs)
+        return cls._instance
 
     def __init__(self):
         super().__init__(self.dispatchMainLoop, jobQueueMaxSize=self.MAX_EVENTS, workerName="EventDispatcher_")

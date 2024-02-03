@@ -14,9 +14,47 @@ from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 
 # Todo: migrate to https://pypi.org/project/python-periphery/
-class BipolarStepperMotorDriver(BlockingQueueWorker):
-    LOCK = threading.Lock()
+class MotorDriver(BlockingQueueWorker):
     INSTANCES_COUNT = 0
+
+    def __init__(self, workerName, jobQueueMaxSize=2):
+        super().__init__(self._operateStepper, jobQueueMaxSize=jobQueueMaxSize,
+                         workerName= f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_"
+                         if workerName is None else workerName)
+    @abstractmethod
+    def _operateStepper(self, direction, steps, fn):
+        pass
+
+    @staticmethod
+    def usleep(micros):
+        """
+        Sleep time strategies tested on RPI 4B
+        """
+        if micros < 1000:
+            # Todo: if libc.usleep works, use active wait under 300uS
+            # Active wait
+            # Shows overhead of ~5-10 uS
+            # Driver's pulse time is generally much shorter than step period, i.e. low duty-cycle.
+            nanos = (micros * 1000)
+            start = time.time_ns()
+            while True:
+                end = time.time_ns()
+                if end - start >= nanos:
+                    break
+        # Todo: relying on libc.usleep is hanging up on my RPI, it should be a good fit for sleep times 200us < t < 2ms
+        # elif micros < 2000:
+        #     # Shows overhead of ~110 uS
+        #     # self.libc.usleep(micros)
+        #     time.sleep(micros / 1_000_000)
+        else:
+            # Accuracy is very poor bellow a few mS, significant overhead, test with `benchSleep.benchSleep()`
+            # But the overhead is relatively consistent for each time range, so you can slee less, accounting for tested
+            # overhead in your platform.
+            time.sleep(micros / 1_000_000)
+
+
+class BipolarStepperMotorDriver(MotorDriver):
+    LOCK = threading.Lock()
     """
     Bipolar stepper motor driver abstract implementation.
     Uses a dedicated thread to handle pulses to driver hardware in a non-blocking fashion.
@@ -104,10 +142,10 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         [GPIO_26]   37 * * 38 [GPIO_20]
         [GND]       39 * * 40 [GPIO_21]
         """
-        super().__init__(self._operateStepper, jobQueueMaxSize=2,
-                         workerName=f"{self.__class__.__name__}_{BipolarStepperMotorDriver.INSTANCES_COUNT}_"
+        super().__init__(jobQueueMaxSize=2,
+                         workerName=f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_"
                          if workerName is None else workerName)
-        BipolarStepperMotorDriver.INSTANCES_COUNT += 1
+        self.INSTANCES_COUNT += 1
         self.stepperMotor = stepperMotor
         self.accelerationStrategy = accelerationStrategy
         self.enableGpioPin = enableGpioPin
@@ -188,7 +226,8 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
             self.setSleepMode(sleepOn=False)
             self.setEnableMode(enableOn=True)
 
-        self.navigation.go(self, targetPosition, self.accelerationStrategy, fn, self.isInterrupted)
+        block = self.navigation.go(self, targetPosition, self.accelerationStrategy, fn, self.isInterrupted)
+        block.result()
         if self.navigation.isInterruptible() and self.isInterrupted():
             return
 
@@ -217,39 +256,28 @@ class BipolarStepperMotorDriver(BlockingQueueWorker):
         GPIO.output(self.directionGpioPin, directionState)
         self.currentDirection = directionState
 
-    @staticmethod
-    def usleep(micros):
-        """
-        Sleep time strategies tested on RPI 4B
-        """
-        if micros < 2000:
-            # Todo: if libc.usleep works, use active wait under 300uS
-            # Active wait
-            # Shows overhead of ~5-10 uS
-            # Driver's pulse time is generally much shorter than step period, i.e. low duty-cycle.
-            nanos = (micros * 1000)
-            start = time.time_ns()
-            while True:
-                end = time.time_ns()
-                if end - start >= nanos:
-                    break
-        # Todo: relying on libc.usleep is hanging up on my RPI, it should be a good fit for sleep times 200us < t < 2ms
-        # elif micros < 2000:
-        #     # Shows overhead of ~110 uS
-        #     # self.libc.usleep(micros)
-        #     time.sleep(micros / 1_000_000)
-        else:
-            # Accuracy is very poor bellow a few mS, significant overhead, test with `benchSleep.benchSleep()`
-            # But the overhead is relatively consistent for each time range, so you can slee less, accounting for tested
-            # overhead in your platform.
-            time.sleep(micros / 1_000_000)
-
     @abstractmethod
     def setSleepMode(self, sleepOn=False):
         pass
 
     @abstractmethod
     def setEnableMode(self, enableOn=True):
+        pass
+
+    @abstractmethod
+    def pulseStart(self):
+        """
+        In most controllers this would mean set step pint to HIGH
+        @return:
+        """
+        pass
+
+    @abstractmethod
+    def pulseStop(self):
+        """
+        In most controllers this would mean set step pint to LOW
+        @return:
+        """
         pass
 
 
@@ -349,3 +377,20 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         state = GPIO.LOW if enableOn else GPIO.HIGH
         tprint(f"Setting Enabled pin {self.enableGpioPin} to {state}")
         GPIO.output(self.enableGpioPin, state)
+
+    @abstractmethod
+    def pulseStart(self):
+        """
+        In most controllers this would mean set step pint to HIGH
+        @return:
+        """
+        # tprint(f"Setting step pin {controller.stepGpioPin} HIGH.")
+        GPIO.output(self.stepGpioPin, GPIO.HIGH)
+
+    @abstractmethod
+    def pulseStop(self):
+        """
+        In most controllers this would mean set step pint to LOW
+        @return:
+        """
+        GPIO.output(self.stepGpioPin, GPIO.LOW)

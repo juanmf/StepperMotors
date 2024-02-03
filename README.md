@@ -460,3 +460,27 @@ $ pip install --upgrade -i https://test.pypi.org/simple/ stepper-motors-juanmf1
 # Alternatively can install on RPI directly from whl package, to test before uploading to Index.
 $ pip install --upgrade ./dist/stepper_motors_juanmf1-<latest>-py3-none-any.whl
 ```
+
+In order to test new changes right after pushing to main;  handy ~/.bashrc additions:
+Line `source ../env/bin/activate && \` bellow assumes you use the venv described above
+```bash 
+# Update per your setup: <consumerProject> project where you are importing Stepper motor lib
+
+ 
+function updateMotorLib() {
+    cd ~/projects/StepperMotors/
+    rm -rf "./dist/"
+    git fetch
+    rev=$(git log --oneline -1 origin/main | awk '{print $1}')
+    echo resetting to rev: $rev
+    git reset --hard $rev && \
+	    python3 -m build && \
+	    cd ~/projects/<consumerProject>/src && \
+	    source ../env/bin/activate && \
+	    pip3 install ~/projects/StepperMotors/dist/stepper_motors_juanmf1-0.*-py3-none-any.whl --force
+}
+
+
+alias myProject="cd ~/projects/<consumerProject>/src && source ../env/bin/activate && python3 Main.py"
+alias gpio="sudo netstat -tulpn | grep pigpiod"
+```

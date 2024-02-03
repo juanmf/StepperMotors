@@ -308,13 +308,13 @@ class Benchmark:
         method()
 
     @staticmethod
-    def initBenchmark(stepperMotor, directionPin, stepPin, minPps=None, maxPps=None, minPpsDelta=None, absoluteMinPps=None):
+    def initBenchmark(stepperMotor, directionPin, stepPin, *, sleepGpioPin=None, minPps=None, maxPps=None, minPpsDelta=None, absoluteMinPps=None):
         minPpsDelta = minPpsDelta if minPpsDelta is not None else Benchmark.MIN_PPS_DELTA
         absoluteMinPps = absoluteMinPps if absoluteMinPps is not None else Benchmark.ABSOLUTE_MIN_PPS
         controllerFactory = DynamicControllerFactory()
 
         driver = controllerFactory.getInteractiveDRV8825With(
-            stepperMotor, directionPin, stepPin, minPpsDelta, absoluteMinPps)
+            stepperMotor, directionPin, stepPin, minPpsDelta, absoluteMinPps, sleepGpioPin=sleepGpioPin)
 
         bench = Benchmark()
         # You can add your motor mi and max speed to skip their discovery phases.

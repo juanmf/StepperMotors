@@ -4,8 +4,7 @@ from stepper_motors_juanmf1.AccelerationStrategy import (LinearAcceleration, Acc
                                                          StaticDelayPlanner,
                                                          InteractiveAcceleration, DelayPlanner)
 from stepper_motors_juanmf1.Controller import DRV8825MotorDriver
-from stepper_motors_juanmf1.Navigation import DynamicNavigation, StaticNavigation, Navigation
-
+from stepper_motors_juanmf1.Navigation import DynamicNavigation, StaticNavigation, Navigation, SynchronizedNavigation
 
 class ControllerFactory:
     def getDelayPlanner(self) -> DelayPlanner:
@@ -22,7 +21,6 @@ class ControllerFactory:
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = AccelerationStrategy(stepperMotor, delayPlanner)
-        delayPlanner.setAccelerationStrategy(acceleration)
         return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
@@ -36,7 +34,6 @@ class ControllerFactory:
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = LinearAcceleration(stepperMotor, delayPlanner)
-        delayPlanner.setAccelerationStrategy(acceleration)
         return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
@@ -50,7 +47,6 @@ class ControllerFactory:
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
-        delayPlanner.setAccelerationStrategy(acceleration)
         return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
@@ -65,7 +61,6 @@ class ControllerFactory:
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = CustomAccelerationPerPps(stepperMotor, delayPlanner, transformations=transformations)
-        delayPlanner.setAccelerationStrategy(acceleration)
         return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
@@ -79,7 +74,6 @@ class ControllerFactory:
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = InteractiveAcceleration(stepperMotor, delayPlanner, minSpeedDelta, minPps)
-        delayPlanner.setAccelerationStrategy(acceleration)
         return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
@@ -100,4 +94,4 @@ class DynamicControllerFactory(ControllerFactory):
         return DynamicDelayPlanner()
 
     def getNavigation(self):
-        return DynamicNavigation()
+        return SynchronizedNavigation()

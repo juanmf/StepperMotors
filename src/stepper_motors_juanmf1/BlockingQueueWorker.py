@@ -32,6 +32,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
         self.workerFuture = self.startWorker(jobConsumer)
         with _WORKERS_LOCK:
             _WORKERS.append(self)
+        self.currentJob = None
 
     def hasQueuedJobs(self):
         return self.__jobQueue.qsize() > 0
@@ -87,6 +88,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
             while True:
                 # Block until movement job is sent our way.
                 job = self.__jobQueue.get(block=True)
+                self.currentJob = job
                 if not isinstance(job, BlockingQueueWorker.Job):
                     raise ValueError(f"Job {job} not a BlockingQueueWorker.Job. You accessed jobQueue directly.")
                 if isinstance(job, BlockingQueueWorker.PoisonPill):
@@ -137,6 +139,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
             super().__init__(paramsList)
             self.startTime = startTime if startTime else Future()
             self.endTime = endTime if endTime else Future()
+            self.block = Future()
 
         def setException(self, throwable):
             if not self.startTime.done():

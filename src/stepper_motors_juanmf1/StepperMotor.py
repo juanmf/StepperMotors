@@ -42,6 +42,7 @@ class StepperMotor:
         # Steps per revolution
         if self.MIN_PPS is None:
             self.MIN_PPS = minPps
+        self.minSleepTime = 1 / self.MIN_PPS
 
     def readSettings(self):
         self.settingsLock.acquire()

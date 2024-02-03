@@ -1,10 +1,14 @@
+import logging
 import time
 from datetime import datetime
 import threading
 import _thread
 import sys
+import traceback
+import os
+os.environ['PYTHONUNBUFFERED'] = '1'
 
-
+logging.basicConfig(level=logging.INFO)
 _printStreams = {}
 _interpreter = None
 _globalPrintLock = threading.Lock()
@@ -35,7 +39,11 @@ def flush_streams():
     out += ("\n===================================================================================\n"
             + "Thread prints Dump Complete =======================================================\n")
 
-    print(out)
+    try:
+        logging.info(out)
+    except RuntimeError as e:
+        print(f"Logging error {e, traceback.format_exc()}")
+
     with _globalPrintLock:
         _printStreams = {}
 
