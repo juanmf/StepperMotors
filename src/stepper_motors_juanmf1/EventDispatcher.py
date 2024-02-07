@@ -1,4 +1,6 @@
+import ctypes
 import uuid
+from multiprocessing import Manager, Lock, Event
 
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
@@ -8,31 +10,36 @@ class EventDispatcher(BlockingQueueWorker):
     MAX_EVENTS = 100
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, mpEventSharedMemory=None, *args, **kwargs):
         """
         Singleton
         """
         if not cls._instance:
             cls._instance = super(EventDispatcher, cls).__new__(cls, *args, **kwargs)
+            cls._instance._mpEventSharedMemory = mpEventSharedMemory
+            cls._instance._mpManager = Manager()
         return cls._instance
 
     def __init__(self):
-        super().__init__(self.dispatchMainLoop, jobQueueMaxSize=self.MAX_EVENTS, workerName="EventDispatcher_")
+        super().__init__(self._dispatchMainLoop, jobQueueMaxSize=self.MAX_EVENTS, workerName="EventDispatcher_")
         self.events = {}
         self.markForUnregister = []
+        self._mpManager: Manager = None
+        self._mpEventSharedMemory = None
+        self._interProcessWorker = None
 
-    def dispatchMainLoop(self, eventName, eventInfo):
-        # Todo: should I add eventId to callee parameters?
-        tprint("dispatchMainLoop")
-        tprint("eventName, eventInfo")
-        tprint(eventName, eventInfo)
-        tprint("")
-        for calleeId, callee in self.events.get(eventName, {}).items():
-            callee(calleeId=calleeId, eventInfo={**eventInfo, **{'eventName': eventName}})
-        else:
-            tprint(f"Missed event {eventName}")
-        while self.markForUnregister:
-            self.unregister(self.markForUnregister.pop(0))
+    def getMpSharedMemory(self):
+        if not self._mpEventSharedMemory:
+            eventInfo = self._mpManager.dict()
+            eventInfo["eventName"] = ""
+            eventInfo["eventInfo"] = ""
+            self._mpEventSharedMemory = [Lock(), Event(), eventInfo]
+            self._interProcessWorker = BlockingQueueWorker(self._waitChildProcessEvent, jobQueueMaxSize=10,
+                                                           workerName="_interProcessEventDispatcherWorker")
+            # Only one job, wait in infinite loop for mp Events.
+            self._interProcessWorker.work([])
+
+        return self._mpEventSharedMemory
 
     def register(self, eventName, callee, oneTimeHandler=False):
         """
@@ -50,7 +57,7 @@ class EventDispatcher(BlockingQueueWorker):
             cIds.append(cId)
             tprint(f"Register eventName {eName}; calleeId {cId}")
             self.events[eventName][cId] = \
-                lambda calleeId, eventInfo: self.callThenUnregister(calleeId, eventInfo, callee) \
+                lambda calleeId, eventInfo: self._callThenUnregister(calleeId, eventInfo, callee) \
                 if oneTimeHandler \
                 else callee
 
@@ -64,9 +71,35 @@ class EventDispatcher(BlockingQueueWorker):
                 return
         tprint(f"Could not Unregister calleeId {calleeId}; Not found")
 
-    def callThenUnregister(self, calleeId, eventInfo, callee):
+    def publishMainLoop(self, eventName, eventInfo=None):
+        self.work([eventName, eventInfo], block=False)
+
+    def _dispatchMainLoop(self, eventName, eventInfo):
+        # Todo: should I add eventId to callee parameters?
+        tprint("dispatchMainLoop")
+        tprint("eventName, eventInfo")
+        tprint(eventName, eventInfo)
+        tprint("")
+        for calleeId, callee in self.events.get(eventName, {}).items():
+            callee(calleeId=calleeId, eventInfo={**eventInfo, **{'eventName': eventName}})
+        else:
+            tprint(f"Missed event {eventName}")
+        while self.markForUnregister:
+            self.unregister(self.markForUnregister.pop(0))
+
+    def _callThenUnregister(self, calleeId, eventInfo, callee):
         callee(calleeId=calleeId, eventInfo=eventInfo)
         self.markForUnregister.append(calleeId)
 
-    def publishMainLoop(self, eventName, eventInfo=None):
-        self.work([eventName, eventInfo], block=False)
+    def _waitChildProcessEvent(self):
+        lock = self._mpEventSharedMemory[0]
+        event = self._mpEventSharedMemory[1]
+        while True:
+            event.wait()
+            with lock:
+                eName, eInfo = self._mpEventSharedMemory[2]["eventName"], self._mpEventSharedMemory[2]["eventInfo"]
+                self._mpEventSharedMemory[2]["eventName"] = ""
+                self._mpEventSharedMemory[2]["eventInfo"] = ""
+                event.clear()
+
+            self._dispatchMainLoop(eName, eInfo)

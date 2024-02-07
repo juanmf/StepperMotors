@@ -45,18 +45,15 @@ class StepperMotor:
         self.minSleepTime = 1 / self.MIN_PPS
 
     def readSettings(self):
-        self.settingsLock.acquire()
-        pps = self.pps
-        sleepTime = self.sleepTime
-        self.settingsLock.release()
+        with self.settingsLock:
+            pps = self.pps
+            sleepTime = self.sleepTime
         return pps, sleepTime
 
     def changeSettings(self, pps, sleepTime):
-        self.settingsLock.acquire()
-        self.pps = pps
-        self.sleepTime = sleepTime
-        self.settingsLock.release()
-
+        with self.settingsLock:
+            self.pps = pps
+            self.sleepTime = sleepTime
 
 
 class PG35S_D48_HHC2(StepperMotor):

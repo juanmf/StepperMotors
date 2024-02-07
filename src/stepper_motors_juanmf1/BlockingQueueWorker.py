@@ -1,19 +1,23 @@
 import queue
+
 import sys
 import threading
 import time
 import traceback
+import uuid
 from concurrent.futures import ThreadPoolExecutor, Future
+from multiprocessing import Queue
 
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, get_current_thread_info
-
 
 _WORKERS: list['BlockingQueueWorker'] = []
 _WORKERS_LOCK = threading.Lock()
 
+
 class UsesSingleThreadedExecutor:
-    def __init__(self, threadPrefix=''):
-        self.executor = ThreadPoolExecutorStackTraced(1, thread_name_prefix=threadPrefix)
+    def __init__(self, threadPrefix='', executor=None):
+        self.executor = executor if executor is not None \
+                        else ThreadPoolExecutorStackTraced(1, thread_name_prefix=threadPrefix)
 
     def __del__(self):
         self.executor.shutdown(wait=False, cancel_futures=True)
@@ -21,14 +25,19 @@ class UsesSingleThreadedExecutor:
 
 class BlockingQueueWorker(UsesSingleThreadedExecutor):
 
-    def __init__(self, jobConsumer, *, jobQueueMaxSize=2, workerName="John_Doe_Worker"):
-        super().__init__(workerName)
+    def __init__(self, jobConsumer, *, jobQueueMaxSize=2, workerName="John_Doe_Worker", jobQueue=None, executor=None,
+                 doneQueue=None, picklizeJobs=False, isProxy=False):
+        super().__init__(workerName, executor)
+        self.picklizeJobs = picklizeJobs
         self.workerName = workerName
         self.workerThread = None
         self.workerAtWork = False
         self.lock = threading.Lock()
         self.jobQueueMaxSize = jobQueueMaxSize
-        self.__jobQueue = queue.Queue(self.jobQueueMaxSize)
+        self.__jobQueue = jobQueue if jobQueue is not None else queue.Queue(self.jobQueueMaxSize)
+        self.__doneQueue = doneQueue
+        # parent process side do not actually work on queued items.
+        self.isProxy = isProxy
         self.workerFuture = self.startWorker(jobConsumer)
         with _WORKERS_LOCK:
             _WORKERS.append(self)
@@ -73,6 +82,11 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
         return pill
 
     def startWorker(self, jobConsumer) -> Future:
+        if self.isProxy:
+            # Todo: never complete. the child process might end, we don't have visibility. we could use this thread
+            #  to propagate events on parent process side.
+            return Future()
+
         if self.workerAtWork:
             raise RuntimeError("There is already a worker at work.")
         return self.executor.submit(lambda: self.consumer(jobConsumer))
@@ -93,13 +107,14 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                     raise ValueError(f"Job {job} not a BlockingQueueWorker.Job. You accessed jobQueue directly.")
                 if isinstance(job, BlockingQueueWorker.PoisonPill):
                     job.isSwallowed(True)
+                    self.taskDone()
                     self.__jobQueue.task_done()
                     return
 
                 job.start()
                 jobConsumer(*job)
                 job.end()
-                self.__jobQueue.task_done()
+                self.taskDone()
                 if isinstance(job, BlockingQueueWorker.Chain):
                     self._handleChainOfWork(job)
 
@@ -135,8 +150,9 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                 f"worker thread ({self.workerThread})")
 
     class Job(list):
-        def __init__(self, *, paramsList: list = None, startTime: Future=None, endTime: Future=None):
+        def __init__(self, *, paramsList: list = None, startTime: Future = None, endTime: Future = None):
             super().__init__(paramsList)
+            self.id = uuid.uuid4()
             self.startTime = startTime if startTime else Future()
             self.endTime = endTime if endTime else Future()
             self.block = Future()
@@ -219,6 +235,34 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
             self.startTime.set_result(doneTime)
             self.endTime.set_result(doneTime)
 
+    def taskDone(self):
+        """
+        Only handle successful jobs
+        If a doneQueue is provided send completed jobs there.
+        """
+        self.__jobQueue.task_done()
+        if self.__doneQueue is not None:
+            job = self.currentJob if not self.picklizeJobs else self.picklizeJob()
+            self.__doneQueue.put(job)
+
+    def picklizeJob(self):
+        return (self.currentJob.id, self.currentJob.startTime.result(), self.currentJob.endTime.result())
+
+
+class SameThreadExecutor:
+
+    def __init__(self, name="Jon Doe Executor"):
+        self.name = name
+
+    def submit(self, fn, *args, **kwargs):
+        try:
+            fn(*args, **kwargs)
+        except RuntimeError as e:
+            print(f"Executor {self.name}: Task failed with error: {e}", traceback.format_exc())
+            raise e
+
+    def shutdown(self, wait, cancel_futures):
+        pass
 
 class ThreadPoolExecutorStackTraced(ThreadPoolExecutor):
 
@@ -257,3 +301,32 @@ def killWorkers():
         workerFuture.result()
         if not pill.isSwallowed():
             tprint(f"Worker died of other causes. {_WORKERS[index]}")
+
+
+class MpQueue(Queue):
+    """
+    will handle both way communications:
+        Roles:
+            MultiProcessingBlockingQueueWorker:
+                Receives jobs through Queue
+                Puts results in out Queue.
+                update passed in shared values with passed in function references
+                fwd events to parent process' event dispatcher.
+            Child Classes:
+                update predefined Locked shared objects in their jobHandlers like position in case of controllers.
+                calls passed in function references wit values when makes sense in their jobHandlers.
+            Client code:
+                Starts Process
+                sends jobs with picklable objects
+                update passed in shared values with passed in function references
+    """
+    def __init__(self, doneQueue=None, ignoreTaskDone=True, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.doneQueue = doneQueue
+        self.ignoreTaskDone = ignoreTaskDone
+
+    def task_done(self):
+        """
+        Makes API compatible with queue.Queue()
+        """
+        pass

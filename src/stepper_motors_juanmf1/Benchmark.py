@@ -258,11 +258,8 @@ class Benchmark:
     def stoppingMotor(self, value=None):
         if value is None:
             return self.isStoppingMotor
-        try:
-            self.lock.acquire()
+        with self.lock:
             self.isStoppingMotor = value
-        finally:
-            self.lock.release()
 
     def resetStoppingFlag(self, currentPosition, targetPosition):
         tprint(f"resetStoppingFlag: currentPosition: {currentPosition}, targetPosition: {targetPosition}")

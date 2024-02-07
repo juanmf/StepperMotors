@@ -13,6 +13,9 @@ from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
 from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver, MotorDriver
 from stepper_motors_juanmf1.StepperMotor import StepperMotor
 
+from src.stepper_motors_juanmf1.EventDispatcher import EventDispatcher
+from src.stepper_motors_juanmf1.myMath import cmp
+
 
 class Navigation:
     _COMPLETED_FUTURE = None  # Class variable
@@ -87,8 +90,8 @@ class DynamicNavigation(Navigation):
                 tprint("Interrupting stepping job.")
                 return
             # Direction is set in position based acceleration' state machine.
-            controller.currentPosition = accelerationStrategy.computeSleepTimeUs(
-                controller.currentPosition, targetPosition, lambda d: controller.setDirection(d))
+            controller.setCurrentPosition(accelerationStrategy.computeSleepTimeUs(
+                controller.currentPosition, targetPosition, lambda d: controller.setDirection(d)))
 
             self.pulseController(controller)
 
@@ -110,6 +113,98 @@ class DynamicNavigation(Navigation):
     @staticmethod
     def isInterruptible():
         return True
+
+
+class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
+
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        """
+        Singleton
+        """
+        if not cls._instance:
+            cls._instance = super(BasicSynchronizedNavigation, cls).__new__(cls, *args, **kwargs)
+        return cls._instance
+
+    def __init__(self, high=GPIO.HIGH, low=GPIO.LOW):
+        BlockingQueueWorker.__init__(self, self.__doGo, jobQueueMaxSize=4, workerName="SynchronizedNavigation")
+        Navigation.__init__(self)
+        # {startTimNs: [(controller, sleepTime), ...]}.
+        self.pulsingControllers = OrderedDict()
+        self.high = high
+        self.low = low
+        self.lock = threading.Lock()
+        self.upPins = []
+        self.eventDispatcher = EventDispatcher()
+
+    # Todo: this will be called from multiple threads, one per driver. Handle synchronization accordingly.
+    # Waits to get all Synchronized controllers to go then coordinates their steps so that all sleep and step at once.
+    def go(self, controller: MotorDriver, targetPosition, accelerationStrategy, fn, interruptPredicate,
+           eventInAdvanceSteps=10, eventName="steppingComplete"):
+        # Contiguous method calls in RPi are about 10uS apart. for a collision here it'd need to be 10K times faster.
+        # this job is navigation level. there is a job per driver we need to complete independently.
+        navJob = self.work([SynchronizedNavigation.PulsingController(
+                controller, controller.stepperMotor.minSleepTime, targetPosition, fn, interruptPredicate,
+                eventInAdvanceSteps=10, eventName="steppingComplete")])
+        return controller.currentJob.block
+
+    def __doGo(self, pulsingController):
+        self.pulsingControllers[time.monotonic_ns()] = pulsingController
+        while self.pulsingControllers:
+            if self.hasQueuedJobs():
+                return
+            duePulses = []
+            dueControllers = []
+            now = time.monotonic_ns()
+            while True:
+                pulseTime, pulsingController = self.pulsingControllers.popitem()
+                if pulseTime > now:
+                    self.pulsingControllers[pulseTime] = pulsingController
+                    break
+                if self.checkDone(pulsingController):
+                    continue
+                duePulses.append(pulsingController.controller.stepGpioPin)
+                dueControllers.append(pulsingController)
+
+            if duePulses:
+                GPIO.output(duePulses, self.high)
+                pulseTime = time.monotonic_ns()
+                self.upPins.extend(duePulses)
+                self.updateSleepTimes(dueControllers, pulseTime)
+                GPIO.output(duePulses, self.low)
+
+    def updateSleepTimes(self, pulsingControllers: list, pulseTimeNs):
+        while pulsingControllers:
+            pulsingController = pulsingControllers.pop()
+            pulsingController.controller.setCurrentPosition(
+                (pulsingController.controller.accelerationStrategy.computeSleepTimeUs(
+                    pulsingController.controller.currentPosition, pulsingController.targetPosition,
+                    lambda d: pulsingController.controller.setDirection(d))))
+            nextPulse = pulseTimeNs + 1000 * pulsingController.controller.accelerationStrategy.getCurrentSleepUs()
+            self.pulsingControllers[nextPulse] = pulsingController
+
+            # Called while Stepper is in flight to finish this step.
+            stepsFromGoal = pulsingController.controller.currentPosition - pulsingController.targetPosition
+            if (abs(stepsFromGoal) == pulsingController.eventInAdvanceSteps
+                and cmp(pulsingController.targetPosition, pulsingController.controller.currentPosition)
+                    == pulsingController.controller.realDirection):
+                # Firing event
+                self.eventDispatcher._dispatchMainLoop(pulsingController.eventName, {"stepsFromGoal": stepsFromGoal})
+
+    def checkDone(self, pulsingController):
+        controllerIsDone = False
+        if (pulsingController.controller.currentPosition == pulsingController.targetPosition
+                and pulsingController.controller.accelerationStrategy.canStop()):
+            # todo: check if still needed.
+            pulsingController.controller.accelerationStrategy.done()
+            # Letting done or stopped Driver continue. This might disrupt timing for other pulsing controllers.
+            pulsingController.controller.currentJob.block.set_result(True)
+            controllerIsDone = True
+        elif pulsingController.interruptPredicate():
+            tprint(f"Interrupting stepping job for {pulsingController.controller.workerName}.")
+            controllerIsDone = True
+        return controllerIsDone
 
 
 # Todo: In applications where several motors need to work together in close coordination, like 3D printing, we can't
@@ -137,7 +232,6 @@ class SynchronizedNavigation(Navigation, BlockingQueueWorker):
         self.lock = threading.Lock()
         self.loop = loop = asyncio.get_event_loop()
 
-
     # Todo: this will be called from multiple threads, one per driver. Handle synchronization accordingly.
     # Waits to get all Synchronized controllers to go then coordinates their steps so that all sleep and step at once.
     def go(self, controller: MotorDriver, targetPosition, accelerationStrategy, fn, interruptPredicate):
@@ -150,9 +244,6 @@ class SynchronizedNavigation(Navigation, BlockingQueueWorker):
         return controller.currentJob.block
 
     def __doGo(self):
-        self.loop.run_until_complete(self.runUntilComplete())
-
-    async def runUntilComplete(self):
         while len(self.pulsingControllers) > 0:
             with self.lock:
                 # waits till 1st pulse is due.
@@ -202,19 +293,22 @@ class SynchronizedNavigation(Navigation, BlockingQueueWorker):
             self.pulsingControllers.pop(pulseTime)
 
     class PulsingController:
-        def __init__(self, controller: MotorDriver, sleepTime, targetPosition, fn=None, interruptPredicate=None):
+        def __init__(self, controller: MotorDriver, sleepTime, targetPosition, fn=None, interruptPredicate=None,
+                     eventInAdvanceSteps=10, eventName="steppingComplete"):
             self.controller = controller
             self.sleepTime = sleepTime
             self.targetPosition = targetPosition
             self.fn = fn
             self.interruptPredicate = interruptPredicate
+            self.eventInAdvanceSteps = eventInAdvanceSteps
+            self.eventName = eventName
 
     def updatePulsedControllersSleepTimes(self, pulseTime, pulsedControllers):
         for pulsingController in pulsedControllers:
-            pulsingController.controller.currentPosition = \
+            pulsingController.controller.setCurrentPosition(
                 (pulsingController.controller.accelerationStrategy.computeSleepTimeUs(
                     pulsingController.controller.currentPosition, pulsingController.targetPosition,
-                    lambda d: pulsingController.controller.setDirection(d)))
+                    lambda d: pulsingController.controller.setDirection(d))))
 
             # tprint(f"Driver's self.currentPosition: {controller.currentPosition}. targetPosition: {targetPosition}")
             nextPulseNs = pulseTime + 1000 * pulsingController.controller.accelerationStrategy.getCurrentSleepUs()

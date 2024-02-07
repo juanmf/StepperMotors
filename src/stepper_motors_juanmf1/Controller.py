@@ -1,3 +1,4 @@
+import ctypes
 import threading
 from abc import abstractmethod
 from concurrent.futures import Future
@@ -13,14 +14,32 @@ from stepper_motors_juanmf1.myMath import sign
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 
+class DriverSharedPositionStruct(ctypes.Structure):
+    """
+    In Multiprocessing, position will be shared through these fields.
+    """
+    _fields_ = [("position", ctypes.c_int),
+                ("direction", ctypes.c_int)]
+
+
 # Todo: migrate to https://pypi.org/project/python-periphery/
 class MotorDriver(BlockingQueueWorker):
     INSTANCES_COUNT = 0
 
-    def __init__(self, workerName, jobQueueMaxSize=2):
-        super().__init__(self._operateStepper, jobQueueMaxSize=jobQueueMaxSize,
-                         workerName= f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_"
-                         if workerName is None else workerName)
+    def __init__(self, *,workerName, jobQueueMaxSize=2, jobQueue=None, sharedMemory=None, isProxy=False):
+        workerName = f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_" \
+                     if workerName is None else workerName
+        super().__init__(self._operateStepper, jobQueueMaxSize=jobQueueMaxSize, workerName=workerName,
+                         jobQueue=jobQueue, isProxy=isProxy)
+
+        if sharedMemory is not None:
+            self.sharedLock = sharedMemory[0]
+            self.sharedPosition = sharedMemory[1].position
+            self.sharedDirection = sharedMemory[1].direction
+            self.sharedMemory = sharedMemory[2:]
+        else:
+            self.sharedMemory = self.sharedDirection = self.sharedPosition = self.sharedLock = None
+
     @abstractmethod
     def _operateStepper(self, direction, steps, fn):
         pass
@@ -51,6 +70,19 @@ class MotorDriver(BlockingQueueWorker):
             # But the overhead is relatively consistent for each time range, so you can slee less, accounting for tested
             # overhead in your platform.
             time.sleep(micros / 1_000_000)
+
+    """
+    Worker proxy methods follow.
+    """
+
+    def hasQueuedJobs(self):
+        return self.worker.hasQueuedJobs()
+
+    def workChain(self, paramsList: list, block=False) -> 'BlockingQueueWorker.Chain':
+        return self.worker.workChain(paramsList, block)
+
+    def work(self, paramsList: list, block=False, startTime: Future = None) -> 'BlockingQueueWorker.Job':
+        return self.worker.work(paramsList, block, startTime)
 
 
 class BipolarStepperMotorDriver(MotorDriver):
@@ -108,13 +140,16 @@ class BipolarStepperMotorDriver(MotorDriver):
                  accelerationStrategy: AccelerationStrategy,
                  directionGpioPin,
                  stepGpioPin,
-                 navigation,
+                 navigation, *,
                  sleepGpioPin=None,
                  stepsMode="Full",
                  modeGpioPins=None,
                  enableGpioPin=None,
                  workerName=None,
-                 useHoldingTorque=None):
+                 useHoldingTorque=None,
+                 jobQueue=None,
+                 sharedMemory=None,
+                 isProxy=False):
         """
         Multiple drivers could share the same mode pins (assuming current supply from pin is enough,
         and the drivers' mode pins are bridged same to same)
@@ -144,7 +179,8 @@ class BipolarStepperMotorDriver(MotorDriver):
         """
         super().__init__(jobQueueMaxSize=2,
                          workerName=f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_"
-                         if workerName is None else workerName)
+                         if workerName is None else workerName, jobQueue=jobQueue, sharedMemory=sharedMemory,
+                         isProxy=isProxy)
         self.INSTANCES_COUNT += 1
         self.stepperMotor = stepperMotor
         self.accelerationStrategy = accelerationStrategy
@@ -212,6 +248,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         interruptibility is determined by Navigation instance injected at construction time.
         :param direction: self.CW or self.CCW
         :param steps: Number of steps, as we rely on direction, an error is raised if negative values are sent.
+        # Todo: client knows targetPosition, would only need currentPosition and realDirection, but not every step.
         :param fn: callable to execute after each step. Contract:
             fn(controller.currentPosition, targetPosition, accelerationStrategy.realDirection)
         """
@@ -236,6 +273,16 @@ class BipolarStepperMotorDriver(MotorDriver):
             self.setEnableMode(enableOn=False)
 
         self.isRunning = False
+
+    def setCurrentPosition(self, position):
+        self.currentPosition = position
+        if self.sharedPosition is not None:
+            with self.sharedLock:
+                self.sharedPosition.value.position = position
+                self.sharedPosition.value.direction = self.currentDirection
+
+    def getCurrentPosition(self):
+        return self.currentPosition
 
     def isInterrupted(self):
         return self.hasQueuedJobs()
@@ -281,6 +328,48 @@ class BipolarStepperMotorDriver(MotorDriver):
         pass
 
 
+class MultiprocessingDriverProxy(BipolarStepperMotorDriver):
+    def __init__(self,
+                 stepperMotor: StepperMotor,
+                 accelerationStrategy: AccelerationStrategy,
+                 directionGpioPin,
+                 stepGpioPin,
+                 navigation, *,
+                 # LOW = sleep mode; HIGH = chip active
+                 sleepGpioPin=None,
+                 stepsMode="Full",
+                 modeGpioPins=None,
+                 # LOW = enabled; HIGH chip disabled
+                 enableGpioPin=None,
+                 jobQueue=None,
+                 sharedMemory=None):
+        """
+        DRIVER PINOUT: [EN??] & [FLT] unused
+
+        [EN]     1  *   *  9 [VMOT] DANGER, VOLTAGE MOTOR KEEP AWAY FROM RaspberryPi // VMOT bridged with capacitor to GND
+        [MODE_0] 2  *   * 10 [GND] // MODE_0 -> modeGpioPins[0]
+        [MODE_1] 3  *   * 11 [B2] // MODE_1 -> modeGpioPins[1] // B2 & B1 to same coil in motor
+        [MODE_2] 4  *   * 12 [B1] // MODE_2 -> modeGpioPins[2]
+        [RST]    5  *   * 13 [A1] // A1 & A2 to same coil in motor  // RST & SLP to [3v3 Power] in Pi
+        [SLP]    6  *   * 14 [A2]
+        [STP]    7  *   * 15 [FLT] // STP -> stepGpioPin in Raspberry
+        [DIR]    8  *   * 16 [GND] // DIR -> directionGpioPin in Raspberry // GND to GND in pi
+
+        @param stepperMotor:
+        @param accelerationStrategy:
+        @param directionGpioPin:
+        @param stepGpioPin:
+        @param navigation:
+        @param sleepGpioPin:
+        @param stepsMode: [STP]
+        @param modeGpioPins: [MODE_0..2]
+        @param enableGpioPin: [EN] LOW = enabled; HIGH chip disabled
+        """
+        super().__init__(stepperMotor, accelerationStrategy, directionGpioPin, stepGpioPin, navigation,
+                         sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
+                         enableGpioPin=enableGpioPin, jobQueue=jobQueue, sharedMemory=sharedMemory)
+
+
 class DRV8825MotorDriver(BipolarStepperMotorDriver):
     """
     Tested with SongHe (ghost company?) & HiLetgo (here:http://www.hiletgo.com/ProductDetail/1952516.html) brands for
@@ -310,19 +399,21 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
     # DRV8825 Uses HIGH pulse on LOW background for STEP signal.
     PULSE_STATE = GPIO.HIGH
 
-
     def __init__(self,
                  stepperMotor: StepperMotor,
                  accelerationStrategy: AccelerationStrategy,
                  directionGpioPin,
                  stepGpioPin,
-                 navigation,
+                 navigation, *,
                  # LOW = sleep mode; HIGH = chip active
                  sleepGpioPin=None,
                  stepsMode="Full",
                  modeGpioPins=None,
                  # LOW = enabled; HIGH chip disabled
-                 enableGpioPin=None):
+                 enableGpioPin=None,
+                 jobQueue=None,
+                 sharedMemory=None,
+                 isProxy=False):
         """
         DRIVER PINOUT: [EN??] & [FLT] unused
 
@@ -347,7 +438,7 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         """
         super().__init__(stepperMotor, accelerationStrategy, directionGpioPin, stepGpioPin, navigation,
                          sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
-                         enableGpioPin=enableGpioPin)
+                         enableGpioPin=enableGpioPin, jobQueue=jobQueue, sharedMemory=sharedMemory, isProxy=isProxy)
         self.SIGNED_STEPS_CALLABLES = {-1: lambda _steps, _fn: self.stepCounterClockWise(_steps, _fn),
                                         1: lambda _steps, _fn: self.stepClockWise(_steps, _fn)}
         tprint(f"sleepPin: {self.sleepGpioPin}.")

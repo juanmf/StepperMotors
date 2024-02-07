@@ -162,8 +162,6 @@ class MyRoboticArm:
     navigation = DynamicNavigation()
     
     acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
-    # Important to set this reference once you have acceleration instance! 
-    delayPlanner.setAccelerationStrategy(acceleration)
     return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation)
 
 ```

@@ -350,7 +350,6 @@ class CustomAccelerationPerPps(AccelerationStrategy):
         out = CustomAccelerationPerPps(
             controller.stepperMotor, controller.accelerationStrategy.delayPlanner, speedBoosts)
         out.done()
-        controller.accelerationStrategy.delayPlanner.setAccelerationStrategy(out)
         # Removing reference to delayPlanner from original accelerationStrategy
         controller.accelerationStrategy.delayPlanner = None
         return out
@@ -457,7 +456,6 @@ class DelayPlanner:
 
     def setAccelerationStrategy(self, accelerationStrategy):
         """
-        Todo: see to link from AccelerationStrategy constructor.
         Important to keep in mind to link to containing AccelerationStrategy, as there is a circular dependency here.
         and This instance is passed to AccelerationStrategy constructor, thus created before without passing an
         instance of AccelerationStrategy.
