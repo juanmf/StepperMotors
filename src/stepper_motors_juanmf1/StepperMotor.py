@@ -85,7 +85,8 @@ class PG35S_D48_HHC2(StepperMotor):
     """
     # TORQUE_CHARACTERISTICS = [(180.0, 320), (500.0, 240), (740.0, 205), (945.0, 0)]
     # TORQUE_CHARACTERISTICS = [(200, 150), (350, 200), (550, 100), (650, 100), (750, 80), (830, 20), (850, 0)]
-    TORQUE_CHARACTERISTICS = [(200, 100), (300, 150), (450, 100), (550, 0)]
+    # TORQUE_CHARACTERISTICS = [(200, 100), (300, 150), (450, 100), (550, 0)]
+    TORQUE_CHARACTERISTICS = [(165, 250), (415, 0)]
 
     """
     Steps per Revolution with 1.8 deg per step
@@ -105,8 +106,8 @@ class PG35S_D48_HHC2(StepperMotor):
     # LOADED_SLEEP_HIGH_LOW = 0.00030 # Benchmarked for 1500PPS was: 0.0002433
 
     # Max tested functional speed was 1067
-    LOADED_MAX_PPS = 900  # DatasheetMax is 1500
-    LOADED_SLEEP = 1 / 900
+    LOADED_MAX_PPS = 400  # DatasheetMax is 1500
+    LOADED_SLEEP = 1 / 400
 
     # target sleep: 1/(2*850) = 0.000588
     # >>> benchSleep(0.000496)

@@ -1,6 +1,9 @@
-from multiprocessing import Process, Queue, Value, Lock
-from typing import Callable, List
-import ctypes
+import multiprocess as mp
+from multiprocess.context import Process
+from multiprocess.synchronize import Lock
+from multiprocess.managers import Value
+
+from typing import Callable
 
 from stepper_motors_juanmf1.AccelerationStrategy import (LinearAcceleration, AccelerationStrategy,
                                                          ExponentialAcceleration,
@@ -8,8 +11,8 @@ from stepper_motors_juanmf1.AccelerationStrategy import (LinearAcceleration, Acc
                                                          StaticDelayPlanner,
                                                          InteractiveAcceleration, DelayPlanner)
 from stepper_motors_juanmf1.Controller import DRV8825MotorDriver, DriverSharedPositionStruct
-from stepper_motors_juanmf1.Navigation import (DynamicNavigation, StaticNavigation, Navigation, BasicSynchronizedNavigation,
-                                               SynchronizedNavigation)
+from stepper_motors_juanmf1.Navigation import (DynamicNavigation, StaticNavigation, Navigation,
+                                               BasicSynchronizedNavigation)
 
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker, MpQueue
 
@@ -153,8 +156,9 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         for i, order in enumerate(self._factoryOrders):
             sharedMemory = []
             # Position updates
-            positionValue = Value(DriverSharedPositionStruct)
-            sharedLock = Lock()
+            initialPosition = DriverSharedPositionStruct(position=0, direction=0)
+            positionValue = Value(DriverSharedPositionStruct, initialPosition)
+            sharedLock = Lock(ctx=mp.get_context())
             sharedMemory.extend([sharedLock, positionValue])
             if self._clientSharedMemory:
                 sharedMemory.extend(self._clientSharedMemory[i])
@@ -165,6 +169,7 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
 
         unpacker = self.Unpacker(self._factoryOrders, queues, sharedMemories, eventSharedMemory)
         childProcess = Process(target=unpacker.unpack)
+        childProcess.start()
         proxies = self.Unpacker.doUnpack(self._factoryOrders, queues, sharedMemories, isProxy=True)
         self.runningProcesses.append((childProcess, proxies))
         self._factoryOrders = []
@@ -177,10 +182,12 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                                     stepsMode="Full",
                                                     modeGpioPins=None,
                                                     enableGpioPin=None):
+
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = CustomAccelerationPerPps(stepperMotor, delayPlanner, transformations=transformations)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
+
+        driver = DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
                                   modeGpioPins=modeGpioPins,
@@ -188,6 +195,8 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                   jobQueue=queue,
                                   sharedMemory=sharedMemory,
                                   isProxy=isProxy)
+        print(f"driver is proxy? {isProxy} {driver} {driver.getJobQueue()}")
+        return driver
 
     def getMpLinearDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionPin, stepPin,
                                sleepGpioPin=None,
@@ -239,6 +248,7 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
             @param sharedMemory:
             @return:
             """
+            print(f"Unpacking in child process!! {self.factoryOrders} {self.queues} {self.sharedMemories}")
             self.eventDispatcher = EventDispatcher(self.eventSharedMemory)
             drivers = self.doUnpack(self.factoryOrders, self.queues, self.sharedMemories, isProxy=False)
             # block main forever.
@@ -249,6 +259,6 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
             drivers = []
             for index, order in enumerate(factoryOrders):
                 drivers.append(
-                    factoryOrders[0](queues[index], sharedMemories[index], isProxy,
-                                     *factoryOrders[1][0], **factoryOrders[1][1]))
+                    order[0](queues[index], sharedMemories[index], isProxy,
+                             *order[1][0], **order[1][1]))
             return drivers

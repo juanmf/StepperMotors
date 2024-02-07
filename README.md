@@ -417,6 +417,43 @@ $ python3 ./Training.py bench
 
 ```
 
+## Multiprocess
+
+`ControllerFactory.MultiProcessingControllerFactory.Unpacker.unpack()` should be the entry point in child process, 
+find log message to make sure process started (log will be compact, this is a "prettified" version):
+```
+Unpacking in child process!!
+[
+    (
+        <bound method MultiProcessingControllerFactory.getMpCustomTorqueCharacteristicsDRV8825With of <stepper_motors_juanmf1.ControllerFactory.MultiProcessingControllerFactory object at 0x7f8be45950>>,
+        (
+            (<stepper_motors_juanmf1.StepperMotor.PG35S_D48_HHC2 object at 0x7f8afc4690>,),
+            {'directionPin': 13, 'stepPin': 19, 'sleepGpioPin': 12}
+        )
+    ),
+    (
+        <bound method MultiProcessingControllerFactory.getMpCustomTorqueCharacteristicsDRV8825With of <stepper_motors_juanmf1.ControllerFactory.MultiProcessingControllerFactory object at 0x7f8be45950>>,
+        (
+            (<stepper_motors_juanmf1.StepperMotor.PG35S_D48_HHC2 object at 0x7f8aee0750>,),
+            {'directionPin': 24, 'stepPin': 18, 'sleepGpioPin': 4}
+        )
+    )
+]
+[
+    <stepper_motors_juanmf1.BlockingQueueWorker.MpQueue object at 0x7f8afc5f50>,
+    <stepper_motors_juanmf1.BlockingQueueWorker.MpQueue object at 0x7f8afc6250>
+]
+[
+    [
+        <Lock(owner=None)>,
+        Value(<class 'stepper_motors_juanmf1.Controller.DriverSharedPositionStruct'>, <stepper_motors_juanmf1.Controller.DriverSharedPositionStruct object at 0x7f8af51130>)
+    ],
+    [
+        <Lock(owner=None)>,
+        Value(<class 'stepper_motors_juanmf1.Controller.DriverSharedPositionStruct'>, <stepper_motors_juanmf1.Controller.DriverSharedPositionStruct object at 0x7f8af511c0>)
+    ]
+]
+```
 ## Contributing
 
 Reminder of release steps for contributor.

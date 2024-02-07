@@ -6,9 +6,11 @@ import time
 import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor, Future
-from multiprocessing import Queue
 
-from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, get_current_thread_info
+import multiprocess as mp
+from multiprocess.queues import Queue
+
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, get_current_thread_info, flush_streams_if_not_empty
 
 _WORKERS: list['BlockingQueueWorker'] = []
 _WORKERS_LOCK = threading.Lock()
@@ -35,6 +37,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
         self.lock = threading.Lock()
         self.jobQueueMaxSize = jobQueueMaxSize
         self.__jobQueue = jobQueue if jobQueue is not None else queue.Queue(self.jobQueueMaxSize)
+        self.isMultiprocess = isinstance(jobQueue, MpQueue)
         self.__doneQueue = doneQueue
         # parent process side do not actually work on queued items.
         self.isProxy = isProxy
@@ -68,11 +71,15 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
         @return: a Future that will be completed when your fn returns, with paramsList as value future.result().
         If your fn raise errors the future.exception() will contain infor about it.
         """
-        job = paramsList if isinstance(paramsList, BlockingQueueWorker.Job) \
-            else BlockingQueueWorker.Job(paramsList=paramsList)
+        job = self.jobbify(paramsList, startTime)
+        if self.isProxy:
+            # Parent process/client side
+            tprint(f"Queueing plain paramList as Proxied: {paramsList} at {time.monotonic_ns()}")
 
-        if startTime:
-            job.startTime = startTime
+            self.__jobQueue.put(BlockingQueueWorker.Proxied(paramsList))
+            # Todo sync completion
+            return job
+
         self.__jobQueue.put(job, block=block)
         return job
 
@@ -91,6 +98,9 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
             raise RuntimeError("There is already a worker at work.")
         return self.executor.submit(lambda: self.consumer(jobConsumer))
 
+    def getJobQueue(self):
+        return self.__jobQueue
+
     def __doConsume(self, jobConsumer):
         # execute job in dedicated thread.
         self.workerThread = get_current_thread_info()
@@ -100,8 +110,15 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                 self.workerAtWork = True
 
             while True:
+                if self.isMultiprocess and not self.isProxy:
+                    # forcing prints on child processes
+                    tprint(f"waiting for MultiProcess jobs {self.__jobQueue}")
+                    flush_streams_if_not_empty()
                 # Block until movement job is sent our way.
                 job = self.__jobQueue.get(block=True)
+                if isinstance(job, BlockingQueueWorker.Proxied):
+                    job = self.jobbify(job)
+
                 self.currentJob = job
                 if not isinstance(job, BlockingQueueWorker.Job):
                     raise ValueError(f"Job {job} not a BlockingQueueWorker.Job. You accessed jobQueue directly.")
@@ -149,6 +166,15 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                 f"jobList max len {self.__jobQueue.maxsize}\n"
                 f"worker thread ({self.workerThread})")
 
+    @staticmethod
+    def jobbify(paramsList: list, startTime: Future = None):
+        job = paramsList if isinstance(paramsList, BlockingQueueWorker.Job) \
+            else BlockingQueueWorker.Job(paramsList=paramsList)
+
+        if startTime:
+            job.startTime = startTime
+        return job
+
     class Job(list):
         def __init__(self, *, paramsList: list = None, startTime: Future = None, endTime: Future = None):
             super().__init__(paramsList)
@@ -181,6 +207,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
         def result(self):
             # Blocks caller until job is done. When JobConsumer sets endTime in ns
             return self.endTime.result()
+
 
     class Chain(Job):
         def __init__(self, worker: 'BlockingQueueWorker', *, paramsList: list = None,
@@ -248,6 +275,10 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
     def picklizeJob(self):
         return (self.currentJob.id, self.currentJob.startTime.result(), self.currentJob.endTime.result())
 
+    class Proxied(list):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
 
 class SameThreadExecutor:
 
@@ -297,6 +328,7 @@ def killWorkers():
     for worker in _WORKERS:
         workerPills.append((worker.workerFuture, worker.killWorker()))
 
+    index: int
     for index, (workerFuture, pill) in enumerate(workerPills):
         workerFuture.result()
         if not pill.isSwallowed():
@@ -320,8 +352,9 @@ class MpQueue(Queue):
                 sends jobs with picklable objects
                 update passed in shared values with passed in function references
     """
-    def __init__(self, doneQueue=None, ignoreTaskDone=True, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, maxsize=0, doneQueue=None, ignoreTaskDone=True):
+        super().__init__(maxsize=maxsize, ctx=mp.get_context())
+        self.maxsize = self._maxsize
         self.doneQueue = doneQueue
         self.ignoreTaskDone = ignoreTaskDone
 

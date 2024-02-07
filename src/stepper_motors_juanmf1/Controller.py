@@ -34,14 +34,13 @@ class MotorDriver(BlockingQueueWorker):
 
         if sharedMemory is not None:
             self.sharedLock = sharedMemory[0]
-            self.sharedPosition = sharedMemory[1].position
-            self.sharedDirection = sharedMemory[1].direction
+            self.sharedPosition = sharedMemory[1]
             self.sharedMemory = sharedMemory[2:]
         else:
-            self.sharedMemory = self.sharedDirection = self.sharedPosition = self.sharedLock = None
+            self.sharedMemory = self.sharedPosition = self.sharedLock = None
 
     @abstractmethod
-    def _operateStepper(self, direction, steps, fn):
+    def _operateStepper(self, direction, steps):
         pass
 
     @staticmethod
@@ -70,19 +69,6 @@ class MotorDriver(BlockingQueueWorker):
             # But the overhead is relatively consistent for each time range, so you can slee less, accounting for tested
             # overhead in your platform.
             time.sleep(micros / 1_000_000)
-
-    """
-    Worker proxy methods follow.
-    """
-
-    def hasQueuedJobs(self):
-        return self.worker.hasQueuedJobs()
-
-    def workChain(self, paramsList: list, block=False) -> 'BlockingQueueWorker.Chain':
-        return self.worker.workChain(paramsList, block)
-
-    def work(self, paramsList: list, block=False, startTime: Future = None) -> 'BlockingQueueWorker.Job':
-        return self.worker.work(paramsList, block, startTime)
 
 
 class BipolarStepperMotorDriver(MotorDriver):
@@ -193,6 +179,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         # Tracks current either by position for position based movement (DynamicNavigation, interruptible)
         # or by fixed number of steps (StaticNavigation, uninterruptible).
         self.navigation = navigation
+        self.navigation.setDriverPulseTimeNs(driverPulseTimeUs=self.PULSE_TIME_MICROS)
         self.currentPosition = 0
         self.currentDirection = None
 
@@ -240,7 +227,7 @@ class BipolarStepperMotorDriver(MotorDriver):
             BipolarStepperMotorDriver.INITIALIZED = True
             GPIO.setmode(GPIO.BCM)
 
-    def _operateStepper(self, direction, steps, fn):
+    def _operateStepper(self, direction, steps, fn=None):
         """
         Positive change in position is in clockwise direction, negative is counter clock wise.
         callable signature is expected as fn(currentPosition, targetPosition, realDirection)
@@ -251,6 +238,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         # Todo: client knows targetPosition, would only need currentPosition and realDirection, but not every step.
         :param fn: callable to execute after each step. Contract:
             fn(controller.currentPosition, targetPosition, accelerationStrategy.realDirection)
+            Note it does not work with lambdas on multiprocess!
         """
         if steps < 0:
             raise RuntimeError("Can't handle negative steps. Use direction (self.CW or self.CCW) & steps > 0 properly.")
@@ -287,13 +275,13 @@ class BipolarStepperMotorDriver(MotorDriver):
     def isInterrupted(self):
         return self.hasQueuedJobs()
 
-    def signedSteps(self, steps, fn):
-        return self.SIGNED_STEPS_CALLABLES.get(sign(steps), lambda _steps, _fn: None)(abs(steps), fn)
+    def signedSteps(self, steps):
+        return self.SIGNED_STEPS_CALLABLES.get(sign(steps))(abs(steps))
 
-    def stepClockWise(self, steps, fn):
+    def stepClockWise(self, steps, fn=None):
         return self.work([self.CW, steps, fn], block=True)
 
-    def stepCounterClockWise(self, steps, fn):
+    def stepCounterClockWise(self, steps, fn=None):
         return self.work([self.CCW, steps, fn], block=True)
 
     def setDirection(self, directionState):
@@ -394,7 +382,7 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
     # DRV8825 uses min 10 microseconds HIGH for STEP pin.
     # Raspberry Pi sleeps (in % of desired time) increasingly longer the lower the time goes.
     # So in actuality this will sleep about 20uS
-    PULSE_TIME_MICROS = 50
+    PULSE_TIME_MICROS = 20
     SIGNED_STEPS_CALLABLES = {}
     # DRV8825 Uses HIGH pulse on LOW background for STEP signal.
     PULSE_STATE = GPIO.HIGH
@@ -439,8 +427,8 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         super().__init__(stepperMotor, accelerationStrategy, directionGpioPin, stepGpioPin, navigation,
                          sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
                          enableGpioPin=enableGpioPin, jobQueue=jobQueue, sharedMemory=sharedMemory, isProxy=isProxy)
-        self.SIGNED_STEPS_CALLABLES = {-1: lambda _steps, _fn: self.stepCounterClockWise(_steps, _fn),
-                                        1: lambda _steps, _fn: self.stepClockWise(_steps, _fn)}
+        self.SIGNED_STEPS_CALLABLES = {-1: lambda _steps: self.stepCounterClockWise(_steps),
+                                        1: lambda _steps: self.stepClockWise(_steps)}
         tprint(f"sleepPin: {self.sleepGpioPin}.")
         tprint(f"useHOldingToruqe: {self.useHoldingTorque}")
 

@@ -6,6 +6,7 @@ import _thread
 import sys
 import traceback
 import os
+from multiprocess.synchronize import process
 os.environ['PYTHONUNBUFFERED'] = '1'
 
 logging.basicConfig(level=logging.INFO)
@@ -26,12 +27,27 @@ def tprint(*args, sep=' ', end='\n'):
         _printStreams[thread_name][timestamp] = message
 
 
-def flush_streams():
+def flush_current_thread_only():
     global _printStreams
+    thread_name, thread_id = get_current_thread_info()
+    if thread_name in _printStreams:
+        flush_streams({thread_name: _printStreams.pop(thread_name)})
+
+
+def flush_streams_if_not_empty():
+    global _printStreams
+    if _printStreams:
+        flush_streams()
+
+
+def flush_streams(toPrint=None):
+    global _printStreams
+    localPrintItems = _printStreams if toPrint is None else toPrint
+
     out = ""
-    for thread_name, messages in _printStreams.items():
+    for thread_name, messages in localPrintItems.items():
         # Print the contents to stdout
-        out += (f"\n@start thread dump {thread_name} ========================================\n"
+        out += (f"\n@start thread dump {process.current_process().name} => {thread_name} ========================================\n"
                + "==========================================================================\n"
                + "\n".join([f"[{datetime.fromtimestamp(timestamp / 1e6).strftime('%H:%M:%S.%f')}] "
                             f"{message}" for timestamp, message in messages.items()])
@@ -44,8 +60,9 @@ def flush_streams():
     except RuntimeError as e:
         print(f"Logging error {e, traceback.format_exc()}")
 
-    with _globalPrintLock:
-        _printStreams = {}
+    if localPrintItems is _printStreams:
+        with _globalPrintLock:
+            _printStreams = {}
 
 
 def get_current_thread_info():

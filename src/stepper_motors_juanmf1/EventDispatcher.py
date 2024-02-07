@@ -1,6 +1,7 @@
 import ctypes
 import uuid
-from multiprocessing import Manager, Lock, Event
+import multiprocess as mp
+from multiprocess.synchronize import Lock, Event
 
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
@@ -10,30 +11,29 @@ class EventDispatcher(BlockingQueueWorker):
     MAX_EVENTS = 100
     _instance = None
 
-    def __new__(cls, mpEventSharedMemory=None, *args, **kwargs):
+    def __new__(cls, *args, **kwargs):
         """
         Singleton
         """
         if not cls._instance:
             cls._instance = super(EventDispatcher, cls).__new__(cls, *args, **kwargs)
-            cls._instance._mpEventSharedMemory = mpEventSharedMemory
-            cls._instance._mpManager = Manager()
         return cls._instance
 
-    def __init__(self):
+    def __init__(self, mpEventSharedMemory=None):
         super().__init__(self._dispatchMainLoop, jobQueueMaxSize=self.MAX_EVENTS, workerName="EventDispatcher_")
         self.events = {}
         self.markForUnregister = []
-        self._mpManager: Manager = None
-        self._mpEventSharedMemory = None
+        self._mpManager: mp.Manager = None
+        self._mpEventSharedMemory = mpEventSharedMemory
         self._interProcessWorker = None
 
     def getMpSharedMemory(self):
         if not self._mpEventSharedMemory:
+            self._mpManager = mp.Manager()
             eventInfo = self._mpManager.dict()
             eventInfo["eventName"] = ""
             eventInfo["eventInfo"] = ""
-            self._mpEventSharedMemory = [Lock(), Event(), eventInfo]
+            self._mpEventSharedMemory = [Lock(ctx=mp.get_context()), Event(ctx=mp.get_context()), eventInfo]
             self._interProcessWorker = BlockingQueueWorker(self._waitChildProcessEvent, jobQueueMaxSize=10,
                                                            workerName="_interProcessEventDispatcherWorker")
             # Only one job, wait in infinite loop for mp Events.

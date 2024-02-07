@@ -294,6 +294,7 @@ class CustomAccelerationPerPps(AccelerationStrategy):
             self.currentSleepTimeUs = 1_000_000 / pps
 
     def setMaxPps(self, pps):
+        pps = int(pps)
         self.maxPps = pps
         self.minSleepTimeUs = 1_000_000 / pps
         if self.currentPps > pps:
@@ -305,8 +306,7 @@ class CustomAccelerationPerPps(AccelerationStrategy):
         Doubles last speed increment.
         """
         self.lastSpeedDelta = self.transformations[-1][1]
-        self.transformations[-1] = (self.transformations[-1][0], round(2 * self.transformations[-1][1]))
-        self.transformationsPPS = [item[0] for item in self.transformations]
+        self.transformations[-1] = (self.transformations[-1][0], int(2 * self.transformations[-1][1]))
 
     def getSpeedDelta(self):
         return self.transformations[-1][1]
@@ -318,7 +318,7 @@ class CustomAccelerationPerPps(AccelerationStrategy):
         :param overrideLastSpeed: if set, prevents storing last increment, use this instead.
         """
         self.lastSpeedDelta = self.transformations[-1][1] if not overrideLastSpeed else overrideLastSpeed
-        self.transformations[-1] = (self.transformations[-1][0], round(speedDelta))
+        self.transformations[-1] = (self.transformations[-1][0], int(speedDelta))
         self.inferMaxPps()
 
     def resetMaxPps(self):

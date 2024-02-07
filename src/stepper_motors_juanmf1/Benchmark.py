@@ -8,7 +8,7 @@ from stepper_motors_juanmf1.AccelerationStrategy import CustomAccelerationPerPps
 from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver
 from stepper_motors_juanmf1.ControllerFactory import DynamicControllerFactory
 from stepper_motors_juanmf1.StepperMotor import GenericStepper
-from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_current_thread_only, flush_current_thread_only
 
 class Benchmark:
     """
@@ -56,10 +56,14 @@ class Benchmark:
         tprint("\n\n")
 
         stop_listening()
+        flush_current_thread_only()
         minPps = self.findMinPPS(controller) if minPps is None else minPps
         stop_listening()
+        flush_current_thread_only()
+
         maxPps = self.findMaxPPS(controller) if maxPps is None else maxPps
         stop_listening()
+        flush_current_thread_only()
         self.maxPpsFound = maxPps
 
         speedBoosts = self.findTransformations(controller, minPps, maxPps)
@@ -84,6 +88,7 @@ class Benchmark:
         for pps, booster in speedBoosts:
             tprint(f"{pps}\t{booster}")
         tprint(f"")
+        flush_current_thread_only()
 
     """
     Find min speed specific methods
@@ -118,12 +123,13 @@ class Benchmark:
         picked = {'picked': False, 'pps': 0}
         fn = lambda c, t, realDirection: self.keepMotorGoingUp(controller, c, controller.currentPosition, picked)
         controller.stepClockWise(10_000, fn)
+        flush_current_thread_only()
         listen_keyboard(
             on_press=lambda k: self.findMaxSpeedControls(k, controller, lambda: self.setPicked(controller, picked)),
             sequential=True,
             until='esc')
 
-        maxPps = picked['pps'] - controller.accelerationStrategy.getSpeedDelta()
+        maxPps = int(picked['pps'] - controller.accelerationStrategy.getSpeedDelta())
         controller.accelerationStrategy.setMaxPps(maxPps)
         tprint(f"Max Speed: {maxPps} <<===")
         return maxPps
@@ -148,6 +154,7 @@ class Benchmark:
         self.stopMotor(controller)
 
         if speedBoosts is None:
+            minPps = int(minPps)
             speedBoosts = [(minPps, self.minSpeedDelta)]
             controller.accelerationStrategy = CustomAccelerationPerPps.constructFrom(controller, speedBoosts)
             controller.accelerationStrategy.setMinPps(minPps)
@@ -158,7 +165,7 @@ class Benchmark:
         tprint("")
         tprint(f"speedBoosts: {speedBoosts}")
         tprint("")
-
+        flush_current_thread_only()
         controller.stepClockWise(10_000, lambda c, t, d: self.keepMotorSpeedingUp(controller, c, t, speedBoosts))
 
         return speedBoosts
