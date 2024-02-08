@@ -35,7 +35,13 @@ A few distinct concepts have been implemented:
     * PG35S_D48_HHC2 stepper motor 
  
 
-![doc/collab.png](./doc/collab.png):
+![doc/collab.png](./doc/collab.png)
+
+>Orange: 
+>* Driver is the mains class your application will interact with.
+>* Benchmark Standalone class for discovering motor limits. 
+>
+> Blue the factory for easy construction/child process setup.
 
 ## Install
 ### Happy path
@@ -49,7 +55,7 @@ Manually (find latest link at https://test.pypi.org/project/stepper-motors-juanm
 stepper_motors_juanmf1-<latest version>-py3-none-any.whl).
 Example with stepper_motors_juanmf1-0.0.2-py3-none-any.whl:
 ```commandline
-juanmf@raspberrypi:~/turret/turret $ wget https://test-files.pythonhosted.org/packages/8b/7d/289fdee8b0a01e3c0927b9407e14803341daa0d50e65cb592de9a41581b7/stepper_motors_juanmf1-0.0.2-py3-none-any.whl
+juanmf@raspberrypi:~/project/project $ wget https://test-files.pythonhosted.org/packages/8b/7d/289fdee8b0a01e3c0927b9407e14803341daa0d50e65cb592de9a41581b7/stepper_motors_juanmf1-0.0.2-py3-none-any.whl
 --2024-01-08 14:23:42--  https://test-files.pythonhosted.org/packages/8b/7d/289fdee8b0a01e3c0927b9407e14803341daa0d50e65cb592de9a41581b7/stepper_motors_juanmf1-0.0.2-py3-none-any.whl
 ...
 Saving to: ‘stepper_motors_juanmf1-0.0.2-py3-none-any.whl’
@@ -58,11 +64,11 @@ stepper_motors_juanmf1-0.0.2-py3-none-any.whl      100%[========================
 
 2024-01-08 14:23:43 (3.01 MB/s) - ‘stepper_motors_juanmf1-0.0.2-py3-none-any.whl’ saved [22507/22507]
 
-juanmf@raspberrypi:~/turret/turret $ pip install ../
-stepper_motors_juanmf1-0.0.2-py3-none-any.whl  turret/                                        
-juanmf@raspberrypi:~/turret/turret $ pip install ../stepper_motors_juanmf1-0.0.2-py3-none-any.whl 
+juanmf@raspberrypi:~/project/project $ pip install ../
+stepper_motors_juanmf1-0.0.2-py3-none-any.whl  project/                                        
+juanmf@raspberrypi:~/project/project $ pip install ../stepper_motors_juanmf1-0.0.2-py3-none-any.whl 
 Looking in indexes: https://pypi.org/simple, https://www.piwheels.org/simple
-Processing /home/juanmf/turret/stepper_motors_juanmf1-0.0.2-py3-none-any.whl
+Processing /home/juanmf/project/stepper_motors_juanmf1-0.0.2-py3-none-any.whl
 Installing collected packages: stepper-motors-juanmf1
 Successfully installed stepper-motors-juanmf1-0.0.2
 ```
@@ -70,7 +76,7 @@ Successfully installed stepper-motors-juanmf1-0.0.2
 To upgrade to a newer release manually, find latest whl file as explained above, then:
 now installing `stepper_motors_juanmf1-0.0.4-py3-none-any.whl`, overriding `0.0.3`
 ```commandline
-juanmf@raspberrypi:~/turret $ pip install --upgrade stepper_motors_juanmf1-0.0.4-py3-none-any.whl
+juanmf@raspberrypi:~/project $ pip install --upgrade stepper_motors_juanmf1-0.0.4-py3-none-any.whl
 Looking in indexes: https://pypi.org/simple, https://www.piwheels.org/simple
 Processing ./stepper_motors_juanmf1-0.0.4-py3-none-any.whl
 Installing collected packages: stepper-motors-juanmf1
@@ -215,7 +221,7 @@ Effectively following this set of curves, [for speed up and slow down](https://w
 Note that identity `x=x`, speedUp and slowDown curves intersect at zero and maxPPS, effecting no change in speed once 
 current speed hits these extreme values.
 
-### tPrint
+### Logs (tPrint())
 
 When you have many `BlockingQueueWorker`s executing your callables, printing to `STD_OUT` can get messy.
 there are utility functions in `ThreadOrderedPrint.py` to help organize print output.
@@ -417,10 +423,86 @@ $ python3 ./Training.py bench
 
 ```
 
-## Multiprocess
+### SynchronizedNavigation
+If you have to coordinate 2 or more motor drivers concurrently, dedicated threads will fail yo miserably due to how 
+CPython's [GIL](https://wiki.python.org/moin/GlobalInterpreterLock) prevents any real simultaneity between threads. 
+Effectively splitting your pulses' frequency as you add motors.
+
+Here is where `stepper_motors_juanmf1.Navigation.BasicSynchronizedNavigation` can help. The drivers are still 
+operating as `BlockingQueueWorker` with its own Thread but they share a Singleton Navigation object that aggregates 
+drivers in need of pulsing sending single GPIO outputs commands at a time, with all necessary stepPins (one per driver). 
+
+This alone can be good enough if your client application isn't overloading the process. `BasicSynchronizedNavigation` 
+implements active wait, looping through controllers (and blocking `stepper_motors_juanmf1.Controller.MotorDriver`)
+until they are satisfied (steps executed) or interrupted (new stepping job came in). This blocking helps prevent 
+BasicSynchronizedNavigation thread (also a `BlockingQueueWorker` instance) from being swapped. 
+
+Helpful Factory methods:
+Pins correspond to [HRB8825 Stepper Motor HAT Board for Raspberry Pi Series Boards](https://www.amazon.com/gp/product/B0B5QGZGB9)
+```python
+from stepper_motors_juanmf1.ControllerFactory import SynchronizedControllerFactory
+from stepper_motors_juanmf1.StepperMotor import GenericStepper
+
+
+# Defaults to Full step mode
+factory = SynchronizedControllerFactory()
+x_stepperMotor = GenericStepper(maxPps=800, minPps=150)
+x_driver = factory.getExponentialDRV8825With(x_stepperMotor, directionPin=13, stepPin=19, sleepGpioPin=12)
+
+y_stepperMotor = GenericStepper(maxPps=800, minPps=150)
+y_driver = factory.getExponentialDRV8825With(y_stepperMotor, directionPin=24, stepPin=18, sleepGpioPin=4)
+
+# Non-blocking, Equivalent to stepCounterClockWise(self, 100):
+y_driver.signedSteps(-100)
+
+# Non-blocking, Equivalent to stepClockWise(self, 200):
+y_driver.signedSteps(200)
+```
+Checkout `SynchronizedControllerFactory` for more details.
+
+### Multiprocess
+
+Building on top of `BasicSynchronizedNavigation`, leveraging
+[multiprocess](https://github.com/uqfoundation/multiprocess) library you can use 
+`stepper_motors_juanmf1.ControllerFactory.MultiProcessingControllerFactory` to spawn a dedicated child process that will
+instantiate your motor drivers with `BasicSynchronizedNavigation` navigation strategy. In Parent process you still get
+`MotorDriver`s instances but configured to acs as proxies, when you send work to them they will pass the requests down
+to their counterparts in child proces, through `multiprocess.queues.Queue`. Ignoring work items in parent process.
+
+Helpful Factory methods:
+
+Pins correspond to [HRB8825 Stepper Motor HAT Board for Raspberry Pi Series Boards](https://www.amazon.com/gp/product/B0B5QGZGB9)
+```python
+from stepper_motors_juanmf1.ControllerFactory import MultiProcessingControllerFactory
+from stepper_motors_juanmf1.StepperMotor import GenericStepper
+
+# Defaults to Full step mode
+controllerFactory = MultiProcessingControllerFactory()
+x_stepperMotor = GenericStepper(maxPps=800, minPps=150)
+y_stepperMotor = GenericStepper(maxPps=800, minPps=150)
+
+x_driver, y_driver = (controllerFactory.setUpProcess()
+    .withDriver([], controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
+                x_stepperMotor, directionPin=13, stepPin=19, sleepGpioPin=12)
+    .withDriver([], controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
+                y_stepperMotor, directionPin=24, stepPin=18, sleepGpioPin=4)
+    .spawn())
+
+# Non-blocking, Equivalent to stepCounterClockWise(self, 100):
+y_driver.signedSteps(-100)
+
+# Non-blocking, Equivalent to stepClockWise(self, 200):
+y_driver.signedSteps(200)
+```
+Checkout `MultiProcessingControllerFactory` for more details.
+
+**Pulses in oscilloscope with 2 motors look amazing! Perfect overlap of pulses and pulse timing. Much better than when 
+sharing resources with main (my) application.** 
+
+Check the logs for the following output to ensure your process starts successfully:
 
 `ControllerFactory.MultiProcessingControllerFactory.Unpacker.unpack()` should be the entry point in child process, 
-find log message to make sure process started (log will be compact, this is a "prettified" version):
+(log will be compact, this is a "prettified" version):
 ```
 Unpacking in child process!!
 [

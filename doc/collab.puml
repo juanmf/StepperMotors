@@ -6,25 +6,37 @@ class BlockingQueueWorker {
 class UsesSingleThreadedExecutor
 class ThreadPoolExecutorStackTraced
 
-class ControllerFactory {
+class ControllerFactory #APPLICATION {
     getLinearDRV8825With(stepperMotor, directionPin, StepPin):
     getExponentialDRV8825With(stepperMotor, directionPin, StepPin):
     getCustomTorqueCharacteristicsDRV8825With(stepperMotor, directionPin, StepPin):
 }
 class StaticControllerFactory
 class DynamicControllerFactory
+class MultiProcessingControllerFactory {
+    +setUpProcess()
+    +withDriver()
+    +spawn()
+    -Unpacker.Unpack() // init Drivers \nin childProcess
+}
 
 class Navigation
 class StaticNavigation
 class DynamicNavigation
+class BasicSynchronizedNavigation
 
-class Benchmark{
+class Benchmark #Orange {
 findMinPps()
 findMaxPps()
 findTransformations() // Max Accelerations
 }
 
-class BipolarStepperMotorDriver
+class BipolarStepperMotorDriver #Orange{
+    signedSteps(steps, fn=None)
+    stepClockWise(steps, fn=None)
+    stepCounterClockWise(steps, fn=None)
+}
+
 class DRV8825MotorDriver
 
 class StepperMotor
@@ -71,6 +83,8 @@ GenericStepper -up-|> StepperMotor
 
 StaticControllerFactory -left-|> ControllerFactory
 DynamicControllerFactory -left-|> ControllerFactory
+SynchronizedControllerFactory -left-|> ControllerFactory
+MultiProcessingControllerFactory -left-|> SynchronizedControllerFactory
 
 DRV8825MotorDriver -up-|> BipolarStepperMotorDriver
 
@@ -85,6 +99,8 @@ Steady -up-|> State
 
 StaticNavigation -down-|> Navigation
 DynamicNavigation -up-|> Navigation
+BasicSynchronizedNavigation -up-|> Navigation
+BasicSynchronizedNavigation -up-|> BlockingQueueWorker
 
 LinearAcceleration ---|> AccelerationStrategy
 ExponentialAcceleration --|> AccelerationStrategy

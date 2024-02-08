@@ -275,8 +275,9 @@ class BipolarStepperMotorDriver(MotorDriver):
     def isInterrupted(self):
         return self.hasQueuedJobs()
 
-    def signedSteps(self, steps):
-        return self.SIGNED_STEPS_CALLABLES.get(sign(steps))(abs(steps))
+    def signedSteps(self, steps, fn=None):
+        call = self.SIGNED_STEPS_CALLABLES.get(sign(steps), lambda _steps, _fn: None)
+        return call(abs(steps), fn)
 
     def stepClockWise(self, steps, fn=None):
         return self.work([self.CW, steps, fn], block=True)
