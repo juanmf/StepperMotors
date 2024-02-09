@@ -1,7 +1,7 @@
 import ctypes
 import uuid
-import multiprocess as mp
-from multiprocess.synchronize import Lock, Event
+from multiprocess import Manager, Lock, Event
+
 
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
@@ -11,29 +11,29 @@ class EventDispatcher(BlockingQueueWorker):
     MAX_EVENTS = 100
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
-        """
-        Singleton
-        """
-        if not cls._instance:
-            cls._instance = super(EventDispatcher, cls).__new__(cls, *args, **kwargs)
-        return cls._instance
+    @staticmethod
+    def instance(*args, **kwargs):
+        if not EventDispatcher._instance:
+            EventDispatcher._instance = EventDispatcher(*args, **kwargs)
+        return EventDispatcher._instance
 
     def __init__(self, mpEventSharedMemory=None):
+        assert EventDispatcher._instance is None
         super().__init__(self._dispatchMainLoop, jobQueueMaxSize=self.MAX_EVENTS, workerName="EventDispatcher_")
         self.events = {}
         self.markForUnregister = []
-        self._mpManager: mp.Manager = None
+        self._mpManager: Manager = None
         self._mpEventSharedMemory = mpEventSharedMemory
+        self._shouldDispatchToParentProcess = (mpEventSharedMemory is not None)
         self._interProcessWorker = None
 
     def getMpSharedMemory(self):
         if not self._mpEventSharedMemory:
-            self._mpManager = mp.Manager()
+            self._mpManager = Manager()
             eventInfo = self._mpManager.dict()
             eventInfo["eventName"] = ""
             eventInfo["eventInfo"] = ""
-            self._mpEventSharedMemory = [Lock(ctx=mp.get_context()), Event(ctx=mp.get_context()), eventInfo]
+            self._mpEventSharedMemory = [Lock(), Event(), eventInfo]
             self._interProcessWorker = BlockingQueueWorker(self._waitChildProcessEvent, jobQueueMaxSize=10,
                                                            workerName="_interProcessEventDispatcherWorker")
             # Only one job, wait in infinite loop for mp Events.
@@ -73,13 +73,19 @@ class EventDispatcher(BlockingQueueWorker):
 
     def publishMainLoop(self, eventName, eventInfo=None):
         self.work([eventName, eventInfo], block=False)
+        tprint(self)
+        if self._shouldDispatchToParentProcess:
+            lock = self._mpEventSharedMemory[0]
+            event = self._mpEventSharedMemory[1]
+            with lock:
+                self._mpEventSharedMemory[2]["eventName"] = eventName
+                self._mpEventSharedMemory[2]["eventInfo"] = eventInfo
+
+            event.set()
 
     def _dispatchMainLoop(self, eventName, eventInfo):
         # Todo: should I add eventId to callee parameters?
-        tprint("dispatchMainLoop")
-        tprint("eventName, eventInfo")
-        tprint(eventName, eventInfo)
-        tprint("")
+        tprint("dispatchMainLoop", f"eventName: {eventName}, eventInfo: {eventInfo}")
         for calleeId, callee in self.events.get(eventName, {}).items():
             callee(calleeId=calleeId, eventInfo={**eventInfo, **{'eventName': eventName}})
         else:
@@ -101,5 +107,4 @@ class EventDispatcher(BlockingQueueWorker):
                 self._mpEventSharedMemory[2]["eventName"] = ""
                 self._mpEventSharedMemory[2]["eventInfo"] = ""
                 event.clear()
-
             self._dispatchMainLoop(eName, eInfo)

@@ -65,9 +65,9 @@ class Navigation:
 class StaticNavigation(Navigation):
 
     def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate):
-        steps = abs(controller.currentPosition - targetPosition)
+        steps = abs(controller.getCurrentPosition() - targetPosition)
         # Todo: find out  if -1 works as LOW (normally set to 0) for direction pin.
-        controller.setDirection(cmp(targetPosition, controller.currentPosition))
+        controller.setDirection(cmp(targetPosition, controller.getCurrentPosition()))
         for i in range(steps):
             self.pulseController(controller)
 
@@ -76,7 +76,7 @@ class StaticNavigation(Navigation):
             controller.usleep(accelerationStrategy.currentSleepTimeUs)
             # fn should not consume many CPU instructions to avoid delays between steps.
             if fn:
-                fn(controller.currentPosition, targetPosition, accelerationStrategy.realDirection)
+                fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection)
 
         accelerationStrategy.done()
         controller.setDirection(GPIO.LOW)
@@ -91,23 +91,23 @@ class DynamicNavigation(Navigation):
 
     def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate):
         # Can cross targetPosition with some speed > 0, that's not a final state.
-        while not (controller.currentPosition == targetPosition and accelerationStrategy.canStop()):
+        while not (controller.getCurrentPosition() == targetPosition and accelerationStrategy.canStop()):
             if interruptPredicate():
                 tprint("Interrupting stepping job.")
                 return
             # Direction is set in position based acceleration' state machine.
             controller.setCurrentPosition(accelerationStrategy.computeSleepTimeUs(
-                controller.currentPosition, targetPosition, lambda d: controller.setDirection(d)))
+                controller.getCurrentPosition(), targetPosition, lambda d: controller.setDirection(d)))
 
             self.pulseController(controller)
 
-            # tprint(f"Driver's self.currentPosition: {controller.currentPosition}. targetPosition: {targetPosition}")
+            # tprint(f"Driver's self.getCurrentPosition(): {controller.getCurrentPosition()}. targetPosition: {targetPosition}")
             micros = accelerationStrategy.getCurrentSleepUs()
 
             controller.usleep(micros)
             # fn should not consume many CPU instructions to avoid delays between steps.
             if fn:
-                fn(controller.currentPosition, targetPosition, accelerationStrategy.realDirection)
+                fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection)
             # tprint("")
 
         # todo: check if still needed.
@@ -147,7 +147,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         self.low = low
         self.lock = threading.Lock()
         self.upPins = []
-        self.eventDispatcher = EventDispatcher()
+        self.eventDispatcher = EventDispatcher.instance()
 
     # Todo: this will be called from multiple threads, one per driver. Handle synchronization accordingly.
     # Waits to get all Synchronized controllers to go then coordinates their steps so that all sleep and step at once.
@@ -157,7 +157,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         # this job is navigation level. there is a job per driver we need to complete independently.
         navJob = self.work([self.PulsingController(
                 controller, controller.stepperMotor.minSleepTime, targetPosition, fn, interruptPredicate,
-                eventInAdvanceSteps=10, eventName="steppingComplete")])
+                eventInAdvanceSteps=eventInAdvanceSteps, eventName=eventName)])
         return controller.currentJob.block
 
     def __doGo(self, pulsingController):
@@ -191,6 +191,9 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                         # Small active wait in case updateSleepTimes() didn't consume Driver's min pulse time.
                         pass
                     GPIO.output(duePulses, self.low)
+                    # Finish with remaining controllers after sending LOW
+                    if dueControllers:
+                        self.updateSleepTimes(dueControllers, pulseTime, count=-1)
 
         except Exception as e:
             print(f"SOMETHING WRONG {e}")
@@ -206,33 +209,43 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
             nextPulse -= 1
         self.pulsingControllers[nextPulse] = pulsingController
 
-    def updateSleepTimes(self, pulsingControllers: list, pulseTimeNs):
-        while pulsingControllers:
+    def updateSleepTimes(self, pulsingControllers: list, pulseTimeNs, count=4):
+        """
+        Asks each pulsing controller's accelerationStrategy to recalculate pulse time.
+        Fires pulsingController.eventName event when close to finish line.
+        @param pulsingControllers: list of pulsingControllers that had just sent a pulse to their hardware drivers.
+        @param pulseTimeNs: time at which the pulse start took place.
+        @param count: number of controllers to deal with. Could be useful to do something else (like sending a LOW to
+                      the drivers) before using the rest of the cycle to finish sleep computations. Send -1 for
+                      unlimited. Defaults to 4, which in RPi 4B stretches a 30Us-40Us delay before giving back control.
+        """
+        while pulsingControllers and count != 0:
+            count -= 1
             pulsingController = pulsingControllers.pop()
             pulsingController.controller.setCurrentPosition(
                 (pulsingController.controller.accelerationStrategy.computeSleepTimeUs(
-                    pulsingController.controller.currentPosition, pulsingController.targetPosition,
+                    pulsingController.controller.getCurrentPosition(), pulsingController.targetPosition,
                     lambda d: pulsingController.controller.setDirection(d))))
             nextPulse = pulseTimeNs + 1000 * pulsingController.controller.accelerationStrategy.getCurrentSleepUs()
             self.putPulsingController(nextPulse, pulsingController)
 
             if pulsingController.fn is not None:
-                pulsingController.fn(pulsingController.controller.currentPosition,
+                pulsingController.fn(pulsingController.controller.getCurrentPosition(),
                                      pulsingController.targetPosition,
                                      pulsingController.controller.accelerationStrategy.realDirection)
 
             if pulsingController.eventInAdvanceSteps is not None:
                 # Called while Stepper is in flight to finish this step.
-                stepsFromGoal = pulsingController.targetPosition - pulsingController.controller.currentPosition
+                stepsFromGoal = pulsingController.targetPosition - pulsingController.controller.getCurrentPosition()
                 if (abs(stepsFromGoal) == pulsingController.eventInAdvanceSteps
-                    and cmp(pulsingController.targetPosition, pulsingController.controller.currentPosition)
+                    and cmp(pulsingController.targetPosition, pulsingController.controller.getCurrentPosition())
                         == pulsingController.controller.accelerationStrategy.realDirection):
                     # Firing event
                     self.eventDispatcher.publishMainLoop(pulsingController.eventName, {"stepsFromGoal": stepsFromGoal})
 
     def checkDone(self, pulsingController):
         controllerIsDone = False
-        if (pulsingController.controller.currentPosition == pulsingController.targetPosition
+        if (pulsingController.controller.getCurrentPosition() == pulsingController.targetPosition
                 and pulsingController.controller.accelerationStrategy.canStop()):
             # todo: check if still needed.
             pulsingController.controller.accelerationStrategy.done()

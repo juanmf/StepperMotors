@@ -237,13 +237,13 @@ class BipolarStepperMotorDriver(MotorDriver):
         :param steps: Number of steps, as we rely on direction, an error is raised if negative values are sent.
         # Todo: client knows targetPosition, would only need currentPosition and realDirection, but not every step.
         :param fn: callable to execute after each step. Contract:
-            fn(controller.currentPosition, targetPosition, accelerationStrategy.realDirection)
+            fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection)
             Note it does not work with lambdas on multiprocess!
         """
         if steps < 0:
             raise RuntimeError("Can't handle negative steps. Use direction (self.CW or self.CCW) & steps > 0 properly.")
         signedDirection = 1 if direction == self.CW else -1
-        targetPosition = self.currentPosition + (signedDirection * steps)
+        targetPosition = self.getCurrentPosition() + (signedDirection * steps)
         self.isRunning = True
 
         if not self.useHoldingTorque:
@@ -263,13 +263,19 @@ class BipolarStepperMotorDriver(MotorDriver):
         self.isRunning = False
 
     def setCurrentPosition(self, position):
+        assert not self.isProxy
         self.currentPosition = position
         if self.sharedPosition is not None:
             with self.sharedLock:
-                self.sharedPosition.value.position = position
-                self.sharedPosition.value.direction = self.currentDirection
+                self.sharedPosition.position = position
+                self.sharedPosition.direction = self.currentDirection
 
     def getCurrentPosition(self):
+        if self.isProxy:
+
+            with self.sharedLock:
+                self.currentPosition = self.sharedPosition.position
+                self.currentDirection = self.sharedPosition.direction
         return self.currentPosition
 
     def isInterrupted(self):
@@ -286,6 +292,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         return self.work([self.CCW, steps, fn], block=True)
 
     def setDirection(self, directionState):
+        # Todo: update sharedMemory
         # Translating potential negative values to GPIO.LOW
         directionState = GPIO.HIGH if directionState == GPIO.HIGH else GPIO.LOW
         tprint(f"Setting direction pin {self.directionGpioPin} {directionState}.")
@@ -428,8 +435,8 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         super().__init__(stepperMotor, accelerationStrategy, directionGpioPin, stepGpioPin, navigation,
                          sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
                          enableGpioPin=enableGpioPin, jobQueue=jobQueue, sharedMemory=sharedMemory, isProxy=isProxy)
-        self.SIGNED_STEPS_CALLABLES = {-1: lambda _steps: self.stepCounterClockWise(_steps),
-                                        1: lambda _steps: self.stepClockWise(_steps)}
+        self.SIGNED_STEPS_CALLABLES = {-1: lambda steps, fn: self.stepCounterClockWise(steps, fn),
+                                        1: lambda steps, fn: self.stepClockWise(steps, fn)}
         tprint(f"sleepPin: {self.sleepGpioPin}.")
         tprint(f"useHOldingToruqe: {self.useHoldingTorque}")
 

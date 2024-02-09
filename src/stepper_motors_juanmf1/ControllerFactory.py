@@ -1,7 +1,5 @@
 import multiprocess as mp
-from multiprocess.context import Process
-from multiprocess.synchronize import Lock
-from multiprocess.managers import Value
+from multiprocess import Process, Value, Lock
 
 from typing import Callable
 
@@ -14,9 +12,9 @@ from stepper_motors_juanmf1.Controller import DRV8825MotorDriver, DriverSharedPo
 from stepper_motors_juanmf1.Navigation import (DynamicNavigation, StaticNavigation, Navigation,
                                                BasicSynchronizedNavigation)
 
-from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker, MpQueue
-
+from stepper_motors_juanmf1.BlockingQueueWorker import MpQueue
 from stepper_motors_juanmf1.EventDispatcher import EventDispatcher
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_streams_if_not_empty
 
 
 class ControllerFactory:
@@ -122,7 +120,7 @@ class SynchronizedControllerFactory(ControllerFactory):
 class MultiProcessingControllerFactory(SynchronizedControllerFactory):
 
     def __init__(self):
-        self.eventDispatcher = EventDispatcher()
+        self.eventDispatcher = EventDispatcher.instance()
         self._factoryOrders = []
         self.runningProcesses = []
         self._clientSharedMemory = []
@@ -154,11 +152,10 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         queues = []
         sharedMemories = []
         for i, order in enumerate(self._factoryOrders):
+            sharedLock = Lock()
             sharedMemory = []
             # Position updates
-            initialPosition = DriverSharedPositionStruct(position=0, direction=0)
-            positionValue = Value(DriverSharedPositionStruct, initialPosition)
-            sharedLock = Lock(ctx=mp.get_context())
+            positionValue = Value(DriverSharedPositionStruct, 0, 0, lock=True)
             sharedMemory.extend([sharedLock, positionValue])
             if self._clientSharedMemory:
                 sharedMemory.extend(self._clientSharedMemory[i])
@@ -169,6 +166,8 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
 
         unpacker = self.Unpacker(self._factoryOrders, queues, sharedMemories, eventSharedMemory)
         childProcess = Process(target=unpacker.unpack)
+        childProcess.daemon = True
+        flush_streams_if_not_empty()
         childProcess.start()
         proxies = self.Unpacker.doUnpack(self._factoryOrders, queues, sharedMemories, isProxy=True)
         self.runningProcesses.append((childProcess, proxies))
@@ -249,7 +248,11 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
             @return:
             """
             print(f"Unpacking in child process!! {self.factoryOrders} {self.queues} {self.sharedMemories}")
-            self.eventDispatcher = EventDispatcher(self.eventSharedMemory)
+            # Removing instance of EventDispatcher in case its state was cloned from Parent Process
+            EventDispatcher._instance = None
+            self.eventDispatcher = EventDispatcher.instance(self.eventSharedMemory)
+            tprint("Unpacker: Instantiating EventDispatcher with shared memory", self.eventSharedMemory, self.eventDispatcher,
+                   self.eventDispatcher._mpEventSharedMemory, self.eventDispatcher._shouldDispatchToParentProcess)
             drivers = self.doUnpack(self.factoryOrders, self.queues, self.sharedMemories, isProxy=False)
             # block main forever.
             drivers.pop().workerFuture.result()

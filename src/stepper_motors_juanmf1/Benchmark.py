@@ -121,7 +121,7 @@ class Benchmark:
         tprint("SEARCHING FOR MAX PPS.")
         tprint("")
         picked = {'picked': False, 'pps': 0}
-        fn = lambda c, t, realDirection: self.keepMotorGoingUp(controller, c, controller.currentPosition, picked)
+        fn = lambda c, t, realDirection: self.keepMotorGoingUp(controller, c, controller.getCurrentPosition(), picked)
         controller.stepClockWise(10_000, fn)
         flush_current_thread_only()
         listen_keyboard(
