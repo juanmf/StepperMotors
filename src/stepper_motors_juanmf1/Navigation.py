@@ -36,7 +36,8 @@ class Navigation:
             cls._COMPLETED_FUTURE.set_result(True)
         return cls._COMPLETED_FUTURE
 
-    def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate):
+    def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate, eventInAdvanceSteps=10,
+           eventName="steppingComplete"):
         return self.get_completed_future()
 
     @staticmethod
@@ -64,7 +65,8 @@ class Navigation:
 
 class StaticNavigation(Navigation):
 
-    def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate):
+    def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate, eventInAdvanceSteps=10,
+           eventName="steppingComplete"):
         steps = abs(controller.getCurrentPosition() - targetPosition)
         # Todo: find out  if -1 works as LOW (normally set to 0) for direction pin.
         controller.setDirection(cmp(targetPosition, controller.getCurrentPosition()))
@@ -78,6 +80,9 @@ class StaticNavigation(Navigation):
             if fn:
                 fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection)
 
+            if (abs(steps - i) == eventInAdvanceSteps):
+                EventDiapatcher.instance().publishMainLoop(eventName, {'position': i})
+
         accelerationStrategy.done()
         controller.setDirection(GPIO.LOW)
         return Navigation.get_completed_future()
@@ -89,7 +94,8 @@ class StaticNavigation(Navigation):
 
 class DynamicNavigation(Navigation):
 
-    def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate):
+    def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate, eventInAdvanceSteps=10,
+           eventName="steppingComplete"):
         # Can cross targetPosition with some speed > 0, that's not a final state.
         while not (controller.getCurrentPosition() == targetPosition and accelerationStrategy.canStop()):
             if interruptPredicate():
@@ -105,10 +111,15 @@ class DynamicNavigation(Navigation):
             micros = accelerationStrategy.getCurrentSleepUs()
 
             controller.usleep(micros)
+            position = controller.getCurrentPosition()
             # fn should not consume many CPU instructions to avoid delays between steps.
             if fn:
                 fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection)
-            # tprint("")
+
+            if (abs(targetPosition - position) == eventInAdvanceSteps
+                and cmp(targetPosition, position) == controller.accelerationStrategy.realDirection):
+                EventDiapatcher.instance().publishMainLoop(eventName, {'position': position})
+
 
         # todo: check if still needed.
         accelerationStrategy.done()
@@ -236,12 +247,12 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
 
             if pulsingController.eventInAdvanceSteps is not None:
                 # Called while Stepper is in flight to finish this step.
-                stepsFromGoal = pulsingController.targetPosition - pulsingController.controller.getCurrentPosition()
-                if (abs(stepsFromGoal) == pulsingController.eventInAdvanceSteps
-                    and cmp(pulsingController.targetPosition, pulsingController.controller.getCurrentPosition())
+                position = pulsingController.controller.getCurrentPosition()
+                if (abs(pulsingController.targetPosition - position) == pulsingController.eventInAdvanceSteps
+                    and cmp(pulsingController.targetPosition, position)
                         == pulsingController.controller.accelerationStrategy.realDirection):
                     # Firing event
-                    self.eventDispatcher.publishMainLoop(pulsingController.eventName, {"stepsFromGoal": stepsFromGoal})
+                    self.eventDispatcher.publishMainLoop(pulsingController.eventName, {"position": position})
 
     def checkDone(self, pulsingController):
         controllerIsDone = False

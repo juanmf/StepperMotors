@@ -135,7 +135,8 @@ class BipolarStepperMotorDriver(MotorDriver):
                  useHoldingTorque=None,
                  jobQueue=None,
                  sharedMemory=None,
-                 isProxy=False):
+                 isProxy=False,
+                 steppingCompleteEventName="steppingComplete"):
         """
         Multiple drivers could share the same mode pins (assuming current supply from pin is enough,
         and the drivers' mode pins are bridged same to same)
@@ -167,6 +168,7 @@ class BipolarStepperMotorDriver(MotorDriver):
                          workerName=f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_"
                          if workerName is None else workerName, jobQueue=jobQueue, sharedMemory=sharedMemory,
                          isProxy=isProxy)
+        self._steppingCompleteEventName = steppingCompleteEventName
         self.INSTANCES_COUNT += 1
         self.stepperMotor = stepperMotor
         self.accelerationStrategy = accelerationStrategy
@@ -227,7 +229,7 @@ class BipolarStepperMotorDriver(MotorDriver):
             BipolarStepperMotorDriver.INITIALIZED = True
             GPIO.setmode(GPIO.BCM)
 
-    def _operateStepper(self, direction, steps, fn=None):
+    def _operateStepper(self, direction, steps, fn=None, jobCompleteEventNamePrefix="", eventInAdvanceSteps=10):
         """
         Positive change in position is in clockwise direction, negative is counter clock wise.
         callable signature is expected as fn(currentPosition, targetPosition, realDirection)
@@ -250,9 +252,13 @@ class BipolarStepperMotorDriver(MotorDriver):
             tprint(f"Waking! Calling setSleepMode with sleepOn=False")
             self.setSleepMode(sleepOn=False)
             self.setEnableMode(enableOn=True)
-
-        block = self.navigation.go(self, targetPosition, self.accelerationStrategy, fn, self.isInterrupted)
+            
+        eventName = jobCompleteEventNamePrefix + self._steppingCompleteEventName
+        # Multiprocess event propagation is in the order of 0.003 seconds or ~1 step at 300 PPS.
+        block = self.navigation.go(self, targetPosition, self.accelerationStrategy, fn, self.isInterrupted, 
+                                   eventInAdvanceSteps=eventInAdvanceSteps, eventName=eventName)
         block.result()
+        EventDiapatcher.instance().publishMainLoop(eventName + "FinalStep", {'position': self.currentPosition})
         if self.navigation.isInterruptible() and self.isInterrupted():
             return
 
@@ -324,48 +330,6 @@ class BipolarStepperMotorDriver(MotorDriver):
         pass
 
 
-class MultiprocessingDriverProxy(BipolarStepperMotorDriver):
-    def __init__(self,
-                 stepperMotor: StepperMotor,
-                 accelerationStrategy: AccelerationStrategy,
-                 directionGpioPin,
-                 stepGpioPin,
-                 navigation, *,
-                 # LOW = sleep mode; HIGH = chip active
-                 sleepGpioPin=None,
-                 stepsMode="Full",
-                 modeGpioPins=None,
-                 # LOW = enabled; HIGH chip disabled
-                 enableGpioPin=None,
-                 jobQueue=None,
-                 sharedMemory=None):
-        """
-        DRIVER PINOUT: [EN??] & [FLT] unused
-
-        [EN]     1  *   *  9 [VMOT] DANGER, VOLTAGE MOTOR KEEP AWAY FROM RaspberryPi // VMOT bridged with capacitor to GND
-        [MODE_0] 2  *   * 10 [GND] // MODE_0 -> modeGpioPins[0]
-        [MODE_1] 3  *   * 11 [B2] // MODE_1 -> modeGpioPins[1] // B2 & B1 to same coil in motor
-        [MODE_2] 4  *   * 12 [B1] // MODE_2 -> modeGpioPins[2]
-        [RST]    5  *   * 13 [A1] // A1 & A2 to same coil in motor  // RST & SLP to [3v3 Power] in Pi
-        [SLP]    6  *   * 14 [A2]
-        [STP]    7  *   * 15 [FLT] // STP -> stepGpioPin in Raspberry
-        [DIR]    8  *   * 16 [GND] // DIR -> directionGpioPin in Raspberry // GND to GND in pi
-
-        @param stepperMotor:
-        @param accelerationStrategy:
-        @param directionGpioPin:
-        @param stepGpioPin:
-        @param navigation:
-        @param sleepGpioPin:
-        @param stepsMode: [STP]
-        @param modeGpioPins: [MODE_0..2]
-        @param enableGpioPin: [EN] LOW = enabled; HIGH chip disabled
-        """
-        super().__init__(stepperMotor, accelerationStrategy, directionGpioPin, stepGpioPin, navigation,
-                         sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
-                         enableGpioPin=enableGpioPin, jobQueue=jobQueue, sharedMemory=sharedMemory)
-
-
 class DRV8825MotorDriver(BipolarStepperMotorDriver):
     """
     Tested with SongHe (ghost company?) & HiLetgo (here:http://www.hiletgo.com/ProductDetail/1952516.html) brands for
@@ -409,7 +373,8 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                  enableGpioPin=None,
                  jobQueue=None,
                  sharedMemory=None,
-                 isProxy=False):
+                 isProxy=False,
+                 steppingCompleteEventName="steppingComplete"):
         """
         DRIVER PINOUT: [EN??] & [FLT] unused
 
@@ -434,7 +399,8 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         """
         super().__init__(stepperMotor, accelerationStrategy, directionGpioPin, stepGpioPin, navigation,
                          sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
-                         enableGpioPin=enableGpioPin, jobQueue=jobQueue, sharedMemory=sharedMemory, isProxy=isProxy)
+                         enableGpioPin=enableGpioPin, jobQueue=jobQueue, sharedMemory=sharedMemory, isProxy=isProxy,
+                         steppingCompleteEventName=steppingCompleteEventName)
         self.SIGNED_STEPS_CALLABLES = {-1: lambda steps, fn: self.stepCounterClockWise(steps, fn),
                                         1: lambda steps, fn: self.stepClockWise(steps, fn)}
         tprint(f"sleepPin: {self.sleepGpioPin}.")

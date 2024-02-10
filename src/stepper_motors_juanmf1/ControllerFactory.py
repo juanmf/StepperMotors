@@ -180,20 +180,23 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                                     sleepGpioPin=None,
                                                     stepsMode="Full",
                                                     modeGpioPins=None,
-                                                    enableGpioPin=None):
+                                                    enableGpioPin=None,
+                                                    steppingCompleteEventName="steppingComplete"):
 
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = CustomAccelerationPerPps(stepperMotor, delayPlanner, transformations=transformations)
 
         driver = DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
-                                  sleepGpioPin=sleepGpioPin,
-                                  stepsMode=stepsMode,
-                                  modeGpioPins=modeGpioPins,
-                                  enableGpioPin=enableGpioPin,
-                                  jobQueue=queue,
-                                  sharedMemory=sharedMemory,
-                                  isProxy=isProxy)
+                                    sleepGpioPin=sleepGpioPin,
+                                    stepsMode=stepsMode,
+                                    modeGpioPins=modeGpioPins,
+                                    enableGpioPin=enableGpioPin,
+                                    jobQueue=queue,
+                                    sharedMemory=sharedMemory,
+                                    isProxy=isProxy,
+                                    steppingCompleteEventName=steppingCompleteEventName)
+
         print(f"driver is proxy? {isProxy} {driver} {driver.getJobQueue()}")
         return driver
 
@@ -201,7 +204,8 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                sleepGpioPin=None,
                                stepsMode="Full",
                                modeGpioPins=None,
-                               enableGpioPin=None):
+                               enableGpioPin=None,
+                               steppingCompleteEventName="steppingComplete"):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = LinearAcceleration(stepperMotor, delayPlanner)
@@ -212,13 +216,15 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                   enableGpioPin=enableGpioPin,
                                   jobQueue=queue,
                                   sharedMemory=sharedMemory,
-                                  isProxy=isProxy)
+                                  isProxy=isProxy,
+                                  steppingCompleteEventName=steppingCompleteEventName)
 
     def getMpExponentialDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionPin, stepPin,
                                     sleepGpioPin=None,
                                     stepsMode="Full",
                                     modeGpioPins=None,
-                                    enableGpioPin=None):
+                                    enableGpioPin=None,
+                                    steppingCompleteEventName="steppingComplete"):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
@@ -229,7 +235,8 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                   enableGpioPin=enableGpioPin,
                                   jobQueue=queue,
                                   sharedMemory=sharedMemory,
-                                  isProxy=isProxy)
+                                  isProxy=isProxy,
+                                  steppingCompleteEventName=steppingCompleteEventName)
 
     class Unpacker:
         def __init__(self, factoryOrders, queues: list, sharedMemories: list, eventSharedMemory):

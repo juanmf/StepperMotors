@@ -570,6 +570,12 @@ $ scp <user>@raspberrypi.local:/<projectDir>/dist/* /<projectDir>/dist/
 
 # Then upload to index
 $ python3 -m twine upload --repository testpypi dist/*
+Enter your username: __token__
+Enter your password: pypi-<your API token> 
+Uploading stepper_motors_juanmf1-0.0.15-py3-none-any.whl
+100% ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 74.3/74.3 kB • 00:00 • 26.8 MB/s
+Uploading stepper_motors_juanmf1-0.0.15.tar.gz
+100% ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 345.2/345.2 kB • 00:00 • 78.0 MB/s
 
 # then reinstall on RPI:
 $ pip install --upgrade -i https://test.pypi.org/simple/ stepper-motors-juanmf1
