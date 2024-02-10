@@ -30,8 +30,9 @@ def tprint(*args, sep=' ', end='\n'):
 def flush_current_thread_only():
     global _printStreams
     thread_name, thread_id = get_current_thread_info()
-    if thread_name in _printStreams:
-        flush_streams({thread_name: _printStreams.pop(thread_name)})
+    with _globalPrintLock:
+        if thread_name in _printStreams:
+            flush_streams({thread_name: _printStreams.pop(thread_name)})
 
 
 def flush_streams_if_not_empty():
@@ -45,24 +46,26 @@ def flush_streams(toPrint=None):
     localPrintItems = _printStreams if toPrint is None else toPrint
 
     out = ""
-    for thread_name, messages in localPrintItems.items():
-        # Print the contents to stdout
-        out += (f"\n@start thread dump {process.current_process().name} => {thread_name} ========================================\n"
-               + "==========================================================================\n"
-               + "\n".join([f"[{datetime.fromtimestamp(timestamp / 1e6).strftime('%H:%M:%S.%f')}] "
-                            f"{message}" for timestamp, message in messages.items()])
-               + f"\n@end thread dump {thread_name} =========================================\n")
-    out += ("\n===================================================================================\n"
-            + "Thread prints Dump Complete =======================================================\n")
+
+    with _globalPrintLock:
+        for thread_name, messages in localPrintItems.items():
+            # Print the contents to stdout
+            out += (f"\n@start thread dump {process.current_process().name} => {thread_name} ========================================\n"
+                   + "==========================================================================\n"
+                   + "\n".join([f"[{datetime.fromtimestamp(timestamp / 1e6).strftime('%H:%M:%S.%f')}] "
+                                f"{message}" for timestamp, message in messages.items()])
+                   + f"\n@end thread dump {thread_name} =========================================\n")
+        out += ("\n===================================================================================\n"
+                + "Thread prints Dump Complete =======================================================\n")
 
     try:
         logging.info(out)
     except RuntimeError as e:
         print(f"Logging error {e, traceback.format_exc()}")
-
-    if localPrintItems is _printStreams:
-        with _globalPrintLock:
-            _printStreams = {}
+    finally:
+        if localPrintItems is _printStreams:
+            with _globalPrintLock:
+                _printStreams = {}
 
 
 def get_current_thread_info():

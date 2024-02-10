@@ -8,8 +8,9 @@ from RPi import GPIO
 import pigpio
 
 from stepper_motors_juanmf1.AccelerationStrategy import AccelerationStrategy
-from stepper_motors_juanmf1.StepperMotor import StepperMotor
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
+from stepper_motors_juanmf1.EventDispatcher import EventDispatcher
+from stepper_motors_juanmf1.StepperMotor import StepperMotor
 from stepper_motors_juanmf1.myMath import sign
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
@@ -258,9 +259,9 @@ class BipolarStepperMotorDriver(MotorDriver):
         block = self.navigation.go(self, targetPosition, self.accelerationStrategy, fn, self.isInterrupted, 
                                    eventInAdvanceSteps=eventInAdvanceSteps, eventName=eventName)
         block.result()
-        EventDiapatcher.instance().publishMainLoop(eventName + "FinalStep", {'position': self.currentPosition})
         if self.navigation.isInterruptible() and self.isInterrupted():
             return
+        EventDispatcher.instance().publishMainLoop(eventName + "FinalStep", {'position': self.currentPosition})
 
         if not self.useHoldingTorque:
             self.setSleepMode(sleepOn=True)
@@ -287,15 +288,16 @@ class BipolarStepperMotorDriver(MotorDriver):
     def isInterrupted(self):
         return self.hasQueuedJobs()
 
-    def signedSteps(self, steps, fn=None):
-        call = self.SIGNED_STEPS_CALLABLES.get(sign(steps), lambda _steps, _fn: None)
-        return call(abs(steps), fn)
+    def signedSteps(self, steps, fn=None, jobCompleteEventNamePrefix=None, eventInAdvanceSteps=10):
+        call = self.SIGNED_STEPS_CALLABLES.get(sign(steps), lambda _steps, _fn, _jobCompleteEventNamePrefix,
+                                                            _eventInAdvanceSteps: None)
+        return call(abs(steps), fn, jobCompleteEventNamePrefix, eventInAdvanceSteps)
 
-    def stepClockWise(self, steps, fn=None):
-        return self.work([self.CW, steps, fn], block=True)
+    def stepClockWise(self, steps, fn=None, jobCompleteEventNamePrefix=None, eventInAdvanceSteps=10):
+        return self.work([self.CW, steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps], block=True)
 
-    def stepCounterClockWise(self, steps, fn=None):
-        return self.work([self.CCW, steps, fn], block=True)
+    def stepCounterClockWise(self, steps, fn=None, jobCompleteEventNamePrefix=None, eventInAdvanceSteps=10):
+        return self.work([self.CCW, steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps], block=True)
 
     def setDirection(self, directionState):
         # Todo: update sharedMemory
@@ -401,8 +403,17 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                          sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
                          enableGpioPin=enableGpioPin, jobQueue=jobQueue, sharedMemory=sharedMemory, isProxy=isProxy,
                          steppingCompleteEventName=steppingCompleteEventName)
-        self.SIGNED_STEPS_CALLABLES = {-1: lambda steps, fn: self.stepCounterClockWise(steps, fn),
-                                        1: lambda steps, fn: self.stepClockWise(steps, fn)}
+        self.SIGNED_STEPS_CALLABLES = {-1: lambda steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps:
+                                           self.stepCounterClockWise(steps,
+                                                                     fn,
+                                                                     jobCompleteEventNamePrefix,
+                                                                     eventInAdvanceSteps),
+                                       1: lambda steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps:
+                                          self.stepClockWise(steps,
+                                                             fn,
+                                                             jobCompleteEventNamePrefix,
+                                                             eventInAdvanceSteps)}
+
         tprint(f"sleepPin: {self.sleepGpioPin}.")
         tprint(f"useHOldingToruqe: {self.useHoldingTorque}")
 
@@ -412,7 +423,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         @param sleepOn: True puts chip to sleep. reducing power consumption to a minimum. You can use this to save
         power, especially when the motor is not in use.
         """
-        tprint(f"self.sleepGpioPin is None {self.sleepGpioPin is None}")
         if self.sleepGpioPin is None:
             return
         state = GPIO.LOW if sleepOn else GPIO.HIGH

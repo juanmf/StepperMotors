@@ -83,7 +83,7 @@ class StaticNavigation(Navigation):
                    controller.sharedMemory)
 
             if abs(steps - i) == eventInAdvanceSteps:
-                EventDiapatcher.instance().publishMainLoop(eventName, {'position': i})
+                EventDiapatcher.instance().publishMainLoop(eventName + "Advance", {'position': i})
 
         accelerationStrategy.done()
         controller.setDirection(GPIO.LOW)
@@ -121,7 +121,7 @@ class DynamicNavigation(Navigation):
 
             if (abs(targetPosition - position) == eventInAdvanceSteps
                 and cmp(targetPosition, position) == controller.accelerationStrategy.realDirection):
-                EventDiapatcher.instance().publishMainLoop(eventName, {'position': position})
+                EventDiapatcher.instance().publishMainLoop(eventName + "Advance", {'position': position})
 
 
         # todo: check if still needed.
@@ -200,14 +200,14 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                 if duePulses:
                     GPIO.output(duePulses, self.high)
                     pulseTime = time.monotonic_ns()
-                    self.updateSleepTimes(dueControllers, pulseTime)
+                    self.updateSleepTimes(dueControllers, pulseTime, count=2)
                     while pulseTime + self.driverPulseTimeNs > time.monotonic_ns():
                         # Small active wait in case updateSleepTimes() didn't consume Driver's min pulse time.
                         pass
                     GPIO.output(duePulses, self.low)
                     # Finish with remaining controllers after sending LOW
                     if dueControllers:
-                        self.updateSleepTimes(dueControllers, pulseTime, count=-1)
+                        self.updateSleepTimes(dueControllers, pulseTime)
 
         except Exception as e:
             print(f"SOMETHING WRONG {e}")
@@ -224,7 +224,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         self.pulsingControllers[nextPulse] = pulsingController
 
     def updateSleepTimes(self, pulsingControllers: list['BasicSynchronizedNavigation.PulsingController'],
-                         pulseTimeNs, count=4):
+                         pulseTimeNs, count=-1):
         """
         Asks each pulsing controller's accelerationStrategy to recalculate pulse time.
         Fires pulsingController.eventName event when close to finish line.
@@ -232,7 +232,8 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         @param pulseTimeNs: time at which the pulse start took place.
         @param count: number of controllers to deal with. Could be useful to do something else (like sending a LOW to
                       the drivers) before using the rest of the cycle to finish sleep computations. Send -1 for
-                      unlimited. Defaults to 4, which in RPi 4B stretches a 30Us-40Us delay before giving back control.
+                      unlimited. Defaults to 2, which in RPi 4B stretches a 15Us-15Us without events &
+                      60Us-75Us with multiprocess events delay before giving back control.
         """
         while pulsingControllers and count != 0:
             count -= 1
@@ -257,7 +258,8 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                     and cmp(pulsingController.targetPosition, position)
                         == pulsingController.controller.accelerationStrategy.realDirection):
                     # Firing event
-                    self.eventDispatcher.publishMainLoop(pulsingController.eventName, {"position": position})
+                    self.eventDispatcher.publishMainLoop(pulsingController.eventName + "Advance",
+                                                         {"position": position})
 
     def checkDone(self, pulsingController):
         controllerIsDone = False

@@ -49,17 +49,19 @@ class EventDispatcher(BlockingQueueWorker):
         :param oneTimeHandler: if unregister after first event dispatched to it.
         :return: uuid or list of uuid depending on how many events were registered.
         """
+        assert callable(callee)
         eventName = [eventName] if isinstance(eventName, str) else eventName
         cIds = []
         for eName in eventName:
             self.events.setdefault(eName, {})
             cId = uuid.uuid4()
             cIds.append(cId)
-            tprint(f"Register eventName {eName}; calleeId {cId}")
-            self.events[eventName][cId] = \
-                lambda calleeId, eventInfo: self._callThenUnregister(calleeId, eventInfo, callee) \
-                if oneTimeHandler \
-                else callee
+            tprint(f"Register eventName {eName}; calleeId {cId}, oneTimeHandler {oneTimeHandler}")
+            if oneTimeHandler:
+                self.events[eName][cId] = lambda calleeId, eventInfo: (
+                    self._callThenUnregister(calleeId, eventInfo, callee))
+            else:
+                self.events[eName][cId] = callee
 
         return cIds[0] if len(cIds) == 1 else cIds
 
@@ -73,7 +75,6 @@ class EventDispatcher(BlockingQueueWorker):
 
     def publishMainLoop(self, eventName, eventInfo=None):
         self.work([eventName, eventInfo], block=False)
-        tprint(self)
         if self._shouldDispatchToParentProcess:
             lock = self._mpEventSharedMemory[0]
             event = self._mpEventSharedMemory[1]
@@ -86,10 +87,13 @@ class EventDispatcher(BlockingQueueWorker):
     def _dispatchMainLoop(self, eventName, eventInfo):
         # Todo: should I add eventId to callee parameters?
         tprint("dispatchMainLoop", f"eventName: {eventName}, eventInfo: {eventInfo}")
-        for calleeId, callee in self.events.get(eventName, {}).items():
-            callee(calleeId=calleeId, eventInfo={**eventInfo, **{'eventName': eventName}})
-        else:
+        if eventName not in self.events:
             tprint(f"Missed event {eventName}")
+            return
+
+        for calleeId, callee in self.events.get(eventName, {}).items():
+            callee.__call__(calleeId, {**eventInfo, **{'eventName': eventName}})
+
         while self.markForUnregister:
             self.unregister(self.markForUnregister.pop(0))
 
@@ -107,4 +111,4 @@ class EventDispatcher(BlockingQueueWorker):
                 self._mpEventSharedMemory[2]["eventName"] = ""
                 self._mpEventSharedMemory[2]["eventInfo"] = ""
                 event.clear()
-            self._dispatchMainLoop(eName, eInfo)
+            self.publishMainLoop(eName, eInfo)

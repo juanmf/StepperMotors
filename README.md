@@ -172,7 +172,7 @@ class MyRoboticArm:
 
 ```
 
-Alternative moveArm implementation verion >0.0.8:
+Alternative moveArm implementation version >0.0.8:
 ```Python
 def moveArm(self, elbowDelta, shoulderDelta, handDelta):
     # moving the motors; encapsulating signed and zero delta logic in `signedSteps` 
@@ -270,130 +270,8 @@ $ python3 Benchmark.py 23 24
 #  is listening, in my case on `tcp6       0      0 :::8888` 
 ```
 Annotated (`# <== `) output:
-```
-Benchmarking azimuth Motor
-Setting direction pin 23 0.
+# Todo: update benchmark putput
 
-
-
-Process has 4 steps, needs human feedback. Make sure you apply relevant load to the motor.
-1) Find min PPS at which the motor show continuity between steps.
-2) Find max PPS motor acn keep up with, this by using modest acceleration so might be slow.
-3) Starting from minPPS will try to jump to greatest next PPS that you observe not to fail with.
-4) after repeating 3 until maxPPS is reached, dump the data in a format compatible with stepperMotors.CustomAccelerationPerPps.transformations
-
-picked['picked']: False
-decreaseSleepTime: pps: 150.
-decreaseSleepTime: TargetSleep: 0; currentSleepTime: 6666.666666666667.
-CurrentPPS: 155.0                                    # <== initial PPS incremented by minimum delta.
-decreaseSleepTime: pps: 155.0.
-decreaseSleepTime: TargetSleep: 0; currentSleepTime: 6451.612903225807.
-CurrentPPS: 160.0                                    # 'up pressed '<== increments by minimum delta.
-decreaseSleepTime: pps: 160.0.
-Enter pressed, setting picked True!!!                # < === picked min speed by pressing enter.
-# < === <ommited a few lines>
-Successfully stopped motor.
-Successfully stopped motor.                          # < === <ommited a few lines>  
-
-Setting direction pin 23 0. 
-SEARCHING FOR MAX PPS.                               # < === search for max speed starts, wait till motor fails and 
-                                                     # press enter ASAP, (have about 0.5 seconds before it keeps increasing speed)                               
-decreaseSleepTime: pps: 150.
-decreaseSleepTime: TargetSleep: 0; currentSleepTime: 6666.666666666667.
-CurrentPPS: 155.0
-decreaseSleepTime: pps: 155.0.
-decreaseSleepTime: TargetSleep: 0; currentSleepTime: 6451.612903225807.
-CurrentPPS: 160.0
-decreaseSleepTime: pps: 160.0.
-decreaseSleepTime: TargetSleep: 0; currentSleepTime: 6250.0.
-CurrentPPS: 165.0
-decreaseSleepTime: pps: 165.0.
-decreaseSleepTime: TargetSleep: 0; currentSleepTime: 6060.606060606061.
-CurrentPPS: 170.0
-...
-Enter pressed, setting picked True!!!               # < === picked maxPPS (system uses previous PPS to falure, you might 
-                                                    # want to give it a margin.)
-# < === <ommited a few lines>
-
-Successfully stopped motor.
-Successfully stopped motor.
-
-speedBoosts: [(165.0, 5)]
-
-Setting direction pin 23 1.
-State Rest -> RampingUp
-State RampingUp -> RampingUp
-decreaseSleepTime: TargetSleep: 5882.35294117647; currentSleepTime: 6060.606060606061.
-pos: 0; self.transformations [(165.0, 5)]
-pos: 1; self.transformations [(165.0, 5)]
-State RampingUp -> Steady
-PASSED speed boost: cPPs: 170 last Speed: 165.0
-Restarting cycle.
-Doubling Delta: new delta: 10
-
-FINDING SPEED BOOSTS FOR MOTOR.                     # < === from here press 'y' or 'n' & 'enter' to pick speed increments
-                                                    # from minPPS to maxPPS
-
-State Steady -> RampingDown
-increaseSleepTime: TargetSleep: 6060.606060606061; currentSleepTime: 5882.35294117647.
-pos: 1; self.transformations [(165.0, 10)]
-resetStoppingFlag: currentPosition: 3526, targetPosition: 3526
-Successfully stopped motor.
-Successfully stopped motor.
-
-Setting direction pin 23 0.
-
-speedBoosts: [(165.0, 10)]
-
-Setting direction pin 23 1.
-State Rest -> RampingUp
-State RampingUp -> RampingUp
-decreaseSleepTime: TargetSleep: 5714.285714285715; currentSleepTime: 6060.606060606061.
-pos: 0; self.transformations [(165.0, 10)]
-pos: 1; self.transformations [(165.0, 10)]
-State RampingUp -> Steady
-PASSED speed boost: cPPs: 175 last Speed: 165.0
-Restarting cycle.
-Doubling Delta: new delta: 20
-
-FINDING SPEED BOOSTS FOR MOTOR.
-
-resetStoppingFlag: currentPosition: 3666, targetPosition: 3670
-resetStoppingFlag: currentPosition: 3667, targetPosition: 3670
-resetStoppingFlag: currentPosition: 3668, targetPosition: 3670
-resetStoppingFlag: currentPosition: 3669, targetPosition: 3670
-State Steady -> RampingDown
-increaseSleepTime: TargetSleep: 6060.606060606061; currentSleepTime: 5714.285714285715.
-pos: 1; self.transformations [(165.0, 20)]
-resetStoppingFlag: currentPosition: 3670, targetPosition: 3670
-Successfully stopped motor.
-Successfully stopped motor.
-
-Setting direction pin 23 0.
-
-speedBoosts: [(165.0, 20)]
-...
-Ending the Search. max speed reached. currentPps: 185; maxPps: 185.0accelerationStrategy: CustomAccelerationPerPps
-
-Found next speed boost of 15, for pps 165.0
-speedBoosts: [(165.0, 15), (180.0, 0)]
-
-
-pos: 1; self.transformations [(165.0, 15), (180.0, 0)]
-transformations exact match: 180.0
-State RampingUp -> Steady
-resetStoppingFlag: currentPosition: 3673, targetPosition: 3677
-Results===========================================================================
-MinSpeed PPS: 165.0; MaxSpeed PPS: 180.00000000000003
-optimal transformations for your motor with current load:
-[(165.0, 15), (180.0, 0)]                                    # < === use this list as input to CustomAccelerationPerPps 
-
-Same data to play in a spreadsheet
-PPS	SpeedDelta PPS
-165.0	15
-180.0	0
-```
-Will clean up output shortly.
 
 Using `Benchmark` from outside the module
 ```Python
@@ -536,6 +414,275 @@ Unpacking in child process!!
     ]
 ]
 ```
+            
+#### Events
+
+This library offers several ways of sharing and synchronizing data in a multiprocess scenario. Some of which are 
+generic enough to be used as standalone data sharing mechanism. Following a few examples:
+            
+Drivers' standard events:
+* `steppingCompleteAdvance` : Fired by default 10 steps before completion. Can be changed with `eventInAdvanceSteps`
+  (see bellow). 
+* `steppingCompleteFinalStep`: Fired just after last Step, after `Navigation.go()` returns control to `MotorDriver`.
+
+These event names can be overriden at driver instantiation time, see `steppingCompleteEventName` constructor parameter. 
+
+At the stepping job level, you can add customized eventName prefixes or change eventInAdvanceSteps for firing 
+steppingCompleteAdvance in advance by the step number you prefer on each stepping job.
+The following methods can be used to send stepping jobs to drivers and customize mentioned parameters.
+            
+```Python
+
+# steps < 0 is CounterClockWise; steps > 0 is ClockWise; 
+signedSteps(self, steps, fn=None, jobCompleteEventNamePrefix=None, eventInAdvanceSteps=10):
+        
+stepClockWise(self, steps, fn=None, jobCompleteEventNamePrefix=None, eventInAdvanceSteps=10):
+        
+stepCounterClockWise(self, steps, fn=None, jobCompleteEventNamePrefix=None, eventInAdvanceSteps=10):
+       
+```
+
+Events get transparently proxied in multiprocessing (at the cost of ~0.0003 seconds extra delay on RPi 4B, roughly 1 
+step at 300 PPS).
+
+Example usage with events:
+            
+```Python
+import ctypes
+from functools import partial
+from multiprocess import Value, Event
+            
+
+class PolarCoordinatesSample:
+
+    def __init__(self, controllerFactory: MultiProcessingControllerFactory):
+        
+        self.fireReadyEventsAwaited = [
+                                   "azimuthAimingCompletesteppingCompleteAdvance",
+                                   "azimuthAimingCompletesteppingCompleteFinalStep",
+                                   "elevationAimingCompletesteppingCompleteAdvance",
+                                   "elevationAimingCompletesteppingCompleteFinalStep"
+                                   ]         
+        self.elevationDriver = None
+        self.azimuthDriver = None
+        self.azimuthDriverEvent = Event()
+        self.elevationDriverEvent = Event()
+        self.azimuthEventsObserverWorker = None
+        self.elevationEventsObserverWorker = None
+        self.initDrivers(controllerFactory)
+            
+        EventDispatcher.instance().register(self.fireReadyEventsAwaited, self.fireReadyEventHandler)
+    
+
+    def initDrivers(self, controllerFactory):
+        if isinstance(controllerFactory, MultiProcessingControllerFactory):
+            self._initMpDrivers(controllerFactory)
+        else:
+            # Not used in this example.
+            self._initLocalDrivers(controllerFactory)
+
+    def _initMpDrivers(self, controllerFactory: MultiProcessingControllerFactory):
+        azimuthDriverShared = [Value(ctypes.c_int, 0), self.azimuthDriverEvent]
+        elevationDriverShared = [Value(ctypes.c_int, 0), self.elevationDriverEvent]
+        self.azimuthDriver, self.elevationDriver = (controllerFactory
+                .setUpProcess()
+                .withDriver(clientSharedMemory=azimuthDriverShared,
+                            factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
+                            stepperMotor=PG35S_D48_HHC2(True), directionPin=13, stepPin=19, sleepGpioPin=12)
+                .withDriver(clientSharedMemory=elevationDriverShared,
+                            factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
+                            stepperMotor=PG35S_D48_HHC2(True), directionPin=24, stepPin=18, sleepGpioPin=4)
+                .spawn())
+            
+        # Dedicated worker thread bloking on azimuthDriverEvent
+        self.azimuthEventsObserverWorker = BlockingQueueWorker(jobConsumer=partial(self.ChildProcessEventObserver,
+                                                                   azimuthDriverShared,
+                                                                   self.azimuthDriver.sharedLock,
+                                                                   "azimuth"),
+                                                               workerName="azimuthEventsObserverWorker")
+            
+        # Dedicated worker thread bloking on elevationDriverEvent    
+        self.elevationEventsObserverWorker = BlockingQueueWorker(jobConsumer=partial(self.ChildProcessEventObserver,
+                                                                     elevationDriverShared,
+                                                                     self.elevationDriver.sharedLock,
+                                                                     "elevation"),
+                                                                 workerName="elevationEventsObserverWorker")
+        # Single job, jobConsumer will loop forever and block on events.
+        self.azimuthEventsObserverWorker.work([])
+        self.elevationEventsObserverWorker.work([])
+
+    def ChildProcessEventObserver(self, sharedData, lock, name):
+        """
+        Runs in parent process in dedicated Worker thread. Blocks until Events fire.
+        """
+        sharedInt = sharedData[0]
+        sharedEvent = sharedData[1]
+        while True:
+            sharedEvent.wait()
+            tprint(f"Parent process notified every {name}'s 100th step. Step: {sharedInt.value}")
+            with lock:
+                sharedEvent.clear()
+
+    def _initLocalDrivers(self, controllerFactory: ControllerFactory):
+        """
+        Not used in multiprocess scenario.
+        """
+        self.azimuthDriver: DRV8825MotorDriver = controllerFactory.getCustomTorqueCharacteristicsDRV8825With(
+            PG35S_D48_HHC2(True), directionPin=13, stepPin=19, sleepGpioPin=12)
+        self.elevationDriver = controllerFactory.getCustomTorqueCharacteristicsDRV8825With(
+            PG35S_D48_HHC2(True), directionPin=24, stepPin=18, sleepGpioPin=4)
+
+            
+    """
+    Setup done, usage follows
+    """
+            
+    def operateDrivers(azimuthDelta, elevationDelta):
+        eventNamePrefix = "AimingComplete"
+        # Events will result in 4 combinations: "[azimuth|elevation]AimingCompletesteppingComplete[Advance|FinalStep]"
+        if azimuthDelta != 0:
+            azimuthJob = self.azimuthDriver.signedSteps(azimuthDelta, self.sharedDataProcessing,
+                                                        jobCompleteEventNamePrefix="azimuth" + eventNamePrefix)
+            self.awaitAzimuthReadyEvents()
+        if elevationDelta != 0:
+            elevationJob = self.elevationDriver.signedSteps(elevationDelta, self.sharedDataProcessing,
+                                                            jobCompleteEventNamePrefix="elevation" + eventNamePrefix)
+            self.awaitElevationReadyEvents()
+            
+            
+            
+    @staticmethod
+    def sharedDataProcessing(currentPosition, targetPosition, direction, sharedMemory=None):
+        """
+        Static method, uses shared state, see :func:`~self._initMpDrivers()`. invoked in child process.
+        Uses `Event.set()` to notify Parent process' observer see :func:`~ChildProcessEventObserver`.
+        Contract, Called each step.
+          fn(pulsingController.controller.getCurrentPosition(),
+             pulsingController.targetPosition,
+             pulsingController.controller.accelerationStrategy.realDirection,
+             pulsingController.controller.sharedMemory)  # Only provided in multiprocessing scenario. Method runs in
+                                                         # child process, you need to sync on parent process.
+        """
+        if not sharedMemory:
+            # Important, as in local process scenario sharedMemory is None. see :func:`~self._initLocalDrivers()`
+            return
+        # Client process knows what's in sharedMemory, not Drivers.
+        sharedMemory[0].value += 1
+        if sharedMemory[0].value % 100 == 0:
+            # Prints every 100 steps.
+            tprint(f"Running callback from Navigation stepping in child process \n "
+                   f"{currentPosition, targetPosition, direction, sharedMemory}")
+            sharedMemory[1].set()  # setting Event for Parent process observer.
+
+            
+```
+
+High level flow
+![doc/multiprocess.png](./doc/multiprocess.png)
+
+#### 3 ways data is shared between Processes:
+##### Slow:
+* MainProcess signals Child Process to perform  Stepping Jobs (`driver.signedSteps()`, `stepClockWise()`, 
+  `stepCounterClockWise()`) are serialized & deserialized in the process of enqueuing in multiprocessing scenario.
+
+##### Fast:
+Child process (motor drivers) updates MainProcess (client app) in the following ways:
+* EventDispatcher uses shared memory to proxy/propagate events upstream.
+* Client-provided job-level callable gets access to custom shared memory and can update and signal its counterpart 
+  in MainProcess. Provided callable/method reference should be static for multiprocess scenario, to not depend on
+  instance state, it gets access to (`currentPosition, targetPosition, direction, sharedMemory:list`). It's client App's
+  responsibility to provide sharedMemory contents, and logic to update and synchronize parent & child processes. 
+  See `PolarCoordinatesSample.sharedDataProcessing()` & `PolarCoordinatesSample.ChildProcessEventObserver()` for 
+  examples on child process updates + signaling & parent process reading respectively. 
+
+** For implementation details inspect `src.stepper_motors_juanmf1.ControllerFactory.MultiProcessingControllerFactory.Unpacker`
+& `src.stepper_motors_juanmf1.ControllerFactory.MultiProcessingControllerFactory.spawn()`
+
+#### Logs
+Sample app  `PolarCoordinatesSample` logs output (edited `...`, `# comments`)  is shown to
+get a sense of sequence of events.
+
+```commandline
+
+INFO:root:
+@start thread dump Process-2 => DRV8825MotorDriver_0__0 ========================================
+==========================================================================
+[09:26:55.620709] Waking! Calling setSleepMode with sleepOn=False
+
+[09:26:55.620774] Setting Sleep pin 12 to 1
+
+[09:27:00.504737] Setting Sleep pin 12 to 0
+
+[09:27:00.504841] waiting for MultiProcess jobs <stepper_motors_juanmf1.BlockingQueueWorker.MpQueue object at 0x7f70b161d0>
+
+@end thread dump DRV8825MotorDriver_0__0 =========================================
+
+@start thread dump Process-2 => SynchronizedNavigation_0 ========================================
+==========================================================================
+[09:26:55.621547] Setting direction pin 13 1.
+
+[09:26:55.621589] State Rest -> RampingUp
+
+[09:26:55.629370] State RampingUp -> Steady
+
+[09:26:55.908247] Running callback from Navigation stepping in child process 
+ (100, 1698.0, 1, [<Synchronized wrapper for c_int(100)>, <Event at 0x7f79ba5a90 unset>])
+...
+
+[09:27:00.213944] Running callback from Navigation stepping in child process 
+ (1600, 1698.0, 1, [<Synchronized wrapper for c_int(1600)>, <Event at 0x7f79ba5a90 unset>])
+
+@end thread dump SynchronizedNavigation_0 =========================================
+
+@start thread dump Process-2 => EventDispatcher__0 ========================================
+==========================================================================
+[09:27:00.467050] dispatchMainLoop eventName: azimuthAimingCompletesteppingCompleteAdvance, eventInfo: {'position': 1688}
+
+[09:27:00.467087] Missed event azimuthAimingCompletesteppingCompleteAdvance
+
+[09:27:00.501334] dispatchMainLoop eventName: azimuthAimingCompletesteppingCompleteFinalStep, eventInfo: {'position': 1698}
+
+[09:27:00.501363] Missed event azimuthAimingCompletesteppingCompleteFinalStep
+
+@end thread dump EventDispatcher__0 =========================================
+
+@start thread dump MainProcess => azimuthEventsObserverWorker_0 ========================================
+==========================================================================
+[09:26:56.770120] Parent process notified every azimuth's 100th step. Step: 400
+...
+
+[09:27:00.214069] Parent process notified every azimuth's 100th step. Step: 1600
+
+@end thread dump azimuthEventsObserverWorker_0 =========================================
+
+@start thread dump MainProcess => EventDispatcher__0 ========================================
+==========================================================================
+
+"""
+Proxied events in MainProcess, Originally fired in Child Process.
+"""
+
+[09:27:00.473943] dispatchMainLoop eventName: azimuthAimingCompletesteppingCompleteAdvance, eventInfo: {'position': 1688}
+
+"""
+Following is an App level event, that fired after consumning all drivers' *CompletesteppingCompleteAdvance.
+"""
+[09:27:00.474164] dispatchMainLoop eventName: AimingComplete, eventInfo: {'isReady': True}
+
+[09:27:00.474177] Missed event AimingComplete  # No subscribers registered.
+
+[09:27:00.508121] dispatchMainLoop eventName: azimuthAimingCompletesteppingCompleteFinalStep, eventInfo: {'position': 1698}
+
+[09:27:00.508335] dispatchMainLoop eventName: AimingCompleteFinalStep, eventInfo: {'isReady': True, 'polarPosition': (1698, 0), 'originalCapturePixel': (1, 2)}
+
+[09:27:00.508349] Missed event AimingCompleteFinalStep  # No subscribers registered.
+
+@end thread dump EventDispatcher__0 =========================================
+
+===================================================================================
+Thread prints Dump Complete =======================================================
+```
+
 ## Contributing
 
 Reminder of release steps for contributor.
@@ -607,3 +754,4 @@ function updateMotorLib() {
 alias myProject="cd ~/projects/<consumerProject>/src && source ../env/bin/activate && python3 Main.py"
 alias gpio="sudo netstat -tulpn | grep pigpiod"
 ```
+            
