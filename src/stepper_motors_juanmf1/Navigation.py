@@ -65,8 +65,9 @@ class Navigation:
 
 class StaticNavigation(Navigation):
 
-    def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate, eventInAdvanceSteps=10,
-           eventName="steppingComplete"):
+    def go(self, controller: MotorDriver, targetPosition, accelerationStrategy, fn, interruptPredicate,
+           eventInAdvanceSteps=10, eventName="steppingComplete"):
+
         steps = abs(controller.getCurrentPosition() - targetPosition)
         # Todo: find out  if -1 works as LOW (normally set to 0) for direction pin.
         controller.setDirection(cmp(targetPosition, controller.getCurrentPosition()))
@@ -78,9 +79,10 @@ class StaticNavigation(Navigation):
             controller.usleep(accelerationStrategy.currentSleepTimeUs)
             # fn should not consume many CPU instructions to avoid delays between steps.
             if fn:
-                fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection)
+                fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection,
+                   controller.sharedMemory)
 
-            if (abs(steps - i) == eventInAdvanceSteps):
+            if abs(steps - i) == eventInAdvanceSteps:
                 EventDiapatcher.instance().publishMainLoop(eventName, {'position': i})
 
         accelerationStrategy.done()
@@ -94,8 +96,9 @@ class StaticNavigation(Navigation):
 
 class DynamicNavigation(Navigation):
 
-    def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate, eventInAdvanceSteps=10,
-           eventName="steppingComplete"):
+    def go(self, controller: MotorDriver, targetPosition, accelerationStrategy, fn, interruptPredicate,
+           eventInAdvanceSteps=10, eventName="steppingComplete"):
+
         # Can cross targetPosition with some speed > 0, that's not a final state.
         while not (controller.getCurrentPosition() == targetPosition and accelerationStrategy.canStop()):
             if interruptPredicate():
@@ -107,14 +110,14 @@ class DynamicNavigation(Navigation):
 
             self.pulseController(controller)
 
-            # tprint(f"Driver's self.getCurrentPosition(): {controller.getCurrentPosition()}. targetPosition: {targetPosition}")
             micros = accelerationStrategy.getCurrentSleepUs()
 
             controller.usleep(micros)
             position = controller.getCurrentPosition()
             # fn should not consume many CPU instructions to avoid delays between steps.
             if fn:
-                fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection)
+                fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection,
+                   controller.sharedMemory)
 
             if (abs(targetPosition - position) == eventInAdvanceSteps
                 and cmp(targetPosition, position) == controller.accelerationStrategy.realDirection):
@@ -220,7 +223,8 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
             nextPulse -= 1
         self.pulsingControllers[nextPulse] = pulsingController
 
-    def updateSleepTimes(self, pulsingControllers: list, pulseTimeNs, count=4):
+    def updateSleepTimes(self, pulsingControllers: list['BasicSynchronizedNavigation.PulsingController'],
+                         pulseTimeNs, count=4):
         """
         Asks each pulsing controller's accelerationStrategy to recalculate pulse time.
         Fires pulsingController.eventName event when close to finish line.
@@ -243,7 +247,8 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
             if pulsingController.fn is not None:
                 pulsingController.fn(pulsingController.controller.getCurrentPosition(),
                                      pulsingController.targetPosition,
-                                     pulsingController.controller.accelerationStrategy.realDirection)
+                                     pulsingController.controller.accelerationStrategy.realDirection,
+                                     pulsingController.controller.sharedMemory)
 
             if pulsingController.eventInAdvanceSteps is not None:
                 # Called while Stepper is in flight to finish this step.
@@ -272,7 +277,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
     class PulsingController:
         def __init__(self, controller: MotorDriver, sleepTime, targetPosition, fn=None, interruptPredicate=None,
                      eventInAdvanceSteps=None, eventName="steppingComplete"):
-            self.controller = controller
+            self.controller: MotorDriver = controller
             self.sleepTime = sleepTime
             self.targetPosition = targetPosition
             self.fn = fn
