@@ -13,7 +13,7 @@ from stepper_motors_juanmf1.Navigation import (DynamicNavigation, StaticNavigati
                                                BasicSynchronizedNavigation)
 
 from stepper_motors_juanmf1.BlockingQueueWorker import MpQueue
-from stepper_motors_juanmf1.EventDispatcher import EventDispatcher
+from stepper_motors_juanmf1.EventDispatcher import EventDispatcher, MultiprocessObserver
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_streams_if_not_empty
 
 
@@ -123,31 +123,34 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         self.eventDispatcher = EventDispatcher.instance()
         self._factoryOrders = []
         self.runningProcesses = []
-        self._clientSharedMemory = []
+        self._clientMultiprocessObservers = []
 
     def setUpProcess(self) -> 'MultiProcessingControllerFactory':
         self._factoryOrders = []
-        self._clientSharedMemory = []
+        self._clientMultiprocessObservers = []
         return self
 
-    def withDriver(self, clientSharedMemory: list,
+    def withDriver(self, multiprocessObserver: MultiprocessObserver,
                    factoryFnReference: Callable, *args, **kwargs) -> 'MultiProcessingControllerFactory':
         """
 
         @param factoryFnReference: any of MultiProcessingControllerFactory.getMp** methods.
-        @param clientSharedMemory: client specific MP shared memory objects to pass along. Final shared memory will have
-        these appended AFTER standard ones as: [Lock, DriverSharedPositionStruct] + [clientSpecificSharedValues...]
-        @return:
+        @param multiprocessObserver: client specific MP shared memory and handlers to pass along. Final shared memory
+                                     will have these appended AFTER standard ones as:
+                                     [Lock, DriverSharedPositionStruct, multiprocessObserver]
+        @return: this factory
         """
         self._factoryOrders.append((factoryFnReference, (args, kwargs)))
-        self._clientSharedMemory.append(clientSharedMemory)
+        self._clientMultiprocessObservers.append(multiprocessObserver)
         return self
 
     def spawn(self):
-        if self._clientSharedMemory:
-            assert len(self._clientSharedMemory) == len(self._factoryOrders)
-
-        eventSharedMemory = self.eventDispatcher.getMpSharedMemory()
+        """
+        @return: A list of proxy drivers you can use on MainProcess to send stepping jobs to counterpart drivers in
+        child process.
+        """
+        if self._clientMultiprocessObservers:
+            assert len(self._clientMultiprocessObservers) == len(self._factoryOrders)
 
         queues = []
         sharedMemories = []
@@ -157,14 +160,16 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
             # Position updates
             positionValue = Value(DriverSharedPositionStruct, 0, 0, lock=True)
             sharedMemory.extend([sharedLock, positionValue])
-            if self._clientSharedMemory:
-                sharedMemory.extend(self._clientSharedMemory[i])
+            if self._clientMultiprocessObservers:
+                sharedMemory.append(self._clientMultiprocessObservers[i])
 
             # Worker Queue
             queues.append(MpQueue())
             sharedMemories.append(sharedMemory)
 
-        unpacker = self.Unpacker(self._factoryOrders, queues, sharedMemories, eventSharedMemory)
+        eventsMultiprocessObserver = self.eventDispatcher.getMultiprocessObserver()
+
+        unpacker = self.Unpacker(self._factoryOrders, queues, sharedMemories, eventsMultiprocessObserver)
         childProcess = Process(target=unpacker.unpack)
         childProcess.daemon = True
         flush_streams_if_not_empty()
@@ -172,7 +177,7 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         proxies = self.Unpacker.doUnpack(self._factoryOrders, queues, sharedMemories, isProxy=True)
         self.runningProcesses.append((childProcess, proxies))
         self._factoryOrders = []
-        self._clientSharedMemory = []
+        self._clientMultiprocessObservers = []
         return proxies
 
     def getMpCustomTorqueCharacteristicsDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionPin, stepPin,
@@ -239,11 +244,11 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                   steppingCompleteEventName=steppingCompleteEventName)
 
     class Unpacker:
-        def __init__(self, factoryOrders, queues: list, sharedMemories: list, eventSharedMemory):
+        def __init__(self, factoryOrders, queues: list, sharedMemories: list, eventMultiprocessObserver):
             self.factoryOrders = factoryOrders
             self.queues = queues
             self.sharedMemories = sharedMemories
-            self.eventSharedMemory = eventSharedMemory
+            self.multiprocessObserver = eventMultiprocessObserver
             self.eventDispatcher = None
 
         def unpack(self):
@@ -255,11 +260,18 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
             @return:
             """
             print(f"Unpacking in child process!! {self.factoryOrders} {self.queues} {self.sharedMemories}")
-            # Removing instance of EventDispatcher in case its state was cloned from Parent Process
+            # Removing Singletons instances in case its state was cloned from Parent Process:
             EventDispatcher._instance = None
-            self.eventDispatcher = EventDispatcher.instance(self.eventSharedMemory)
-            tprint("Unpacker: Instantiating EventDispatcher with shared memory", self.eventSharedMemory, self.eventDispatcher,
-                   self.eventDispatcher._mpEventSharedMemory, self.eventDispatcher._shouldDispatchToParentProcess)
+            BasicSynchronizedNavigation._instance = None
+            DynamicDelayPlanner.Rest._instance = None
+            DynamicDelayPlanner.Steady._instance = None
+            DynamicDelayPlanner.RampingUp._instance = None
+            DynamicDelayPlanner.RampingDown._instance = None
+
+            self.eventDispatcher = EventDispatcher.instance(self.multiprocessObserver)
+            tprint("Unpacker: Instantiating EventDispatcher with shared memory", self.multiprocessObserver,
+                   self.eventDispatcher, self.eventDispatcher._multiprocessObserver,
+                   self.eventDispatcher._shouldDispatchToParentProcess)
             drivers = self.doUnpack(self.factoryOrders, self.queues, self.sharedMemories, isProxy=False)
             # block main forever.
             drivers.pop().workerFuture.result()

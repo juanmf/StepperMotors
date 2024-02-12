@@ -1,7 +1,9 @@
 import ctypes
 import uuid
-from multiprocess import Manager, Lock, Event
+from abc import abstractmethod
+from functools import partial
 
+from multiprocess import Manager, Lock, Event
 
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
@@ -17,29 +19,26 @@ class EventDispatcher(BlockingQueueWorker):
             EventDispatcher._instance = EventDispatcher(*args, **kwargs)
         return EventDispatcher._instance
 
-    def __init__(self, mpEventSharedMemory=None):
+    def __init__(self, multiprocessObserver=None):
         assert EventDispatcher._instance is None
         super().__init__(self._dispatchMainLoop, jobQueueMaxSize=self.MAX_EVENTS, workerName="EventDispatcher_")
         self.events = {}
         self.markForUnregister = []
         self._mpManager: Manager = None
-        self._mpEventSharedMemory = mpEventSharedMemory
-        self._shouldDispatchToParentProcess = (mpEventSharedMemory is not None)
+        self._multiprocessObserver = multiprocessObserver
+        self._shouldDispatchToParentProcess = (multiprocessObserver is not None)
         self._interProcessWorker = None
 
-    def getMpSharedMemory(self):
-        if not self._mpEventSharedMemory:
+    def getMultiprocessObserver(self):
+        if not self._multiprocessObserver:
             self._mpManager = Manager()
             eventInfo = self._mpManager.dict()
             eventInfo["eventName"] = ""
             eventInfo["eventInfo"] = ""
-            self._mpEventSharedMemory = [Lock(), Event(), eventInfo]
-            self._interProcessWorker = BlockingQueueWorker(self._waitChildProcessEvent, jobQueueMaxSize=10,
-                                                           workerName="_interProcessEventDispatcherWorker")
-            # Only one job, wait in infinite loop for mp Events.
-            self._interProcessWorker.work([])
-
-        return self._mpEventSharedMemory
+            self._multiprocessObserver = MultiprocessObserver(eventObserver=self._doWaitChildProcessEvent,
+                                                              eventPublisher=self.multiProcessPublish,
+                                                              sharedMemory=eventInfo)
+        return self._multiprocessObserver
 
     def register(self, eventName, callee, oneTimeHandler=False):
         """
@@ -76,13 +75,7 @@ class EventDispatcher(BlockingQueueWorker):
     def publishMainLoop(self, eventName, eventInfo=None):
         self.work([eventName, eventInfo], block=False)
         if self._shouldDispatchToParentProcess:
-            lock = self._mpEventSharedMemory[0]
-            event = self._mpEventSharedMemory[1]
-            with lock:
-                self._mpEventSharedMemory[2]["eventName"] = eventName
-                self._mpEventSharedMemory[2]["eventInfo"] = eventInfo
-
-            event.set()
+            MultiprocessObserver.eventPublisher(self._multiprocessObserver, eventName, eventInfo)
 
     def _dispatchMainLoop(self, eventName, eventInfo):
         # Todo: should I add eventId to callee parameters?
@@ -101,14 +94,50 @@ class EventDispatcher(BlockingQueueWorker):
         callee(calleeId=calleeId, eventInfo=eventInfo)
         self.markForUnregister.append(calleeId)
 
-    def _waitChildProcessEvent(self):
-        lock = self._mpEventSharedMemory[0]
-        event = self._mpEventSharedMemory[1]
+    def _doWaitChildProcessEvent(self, sharedMemory):
+        eName, eInfo = sharedMemory["eventName"], sharedMemory["eventInfo"]
+        sharedMemory["eventName"] = ""
+        sharedMemory["eventInfo"] = ""
+        self.publishMainLoop(eName, eInfo)
+
+    @staticmethod
+    def multiProcessPublish(sharedMemory, eventName, eventInfo):
+        sharedMemory["eventName"] = eventName
+        sharedMemory["eventInfo"] = eventInfo
+
+
+class MultiprocessObserver(BlockingQueueWorker):
+    instanceCountLock = Lock()
+    count = 0
+
+    def __init__(self, *, eventObserver, eventPublisher, sharedMemory):
+        with MultiprocessObserver.instanceCountLock:
+            super().__init__(partial(self.eventObserver, self),
+                             jobQueueMaxSize=1, workerName=f"MultiprocessObserver_{self.count}")
+            MultiprocessObserver.count += 1
+
+        self._eventObserver = eventObserver
+        self._eventPublisher = eventPublisher
+        self._sharedMemory = sharedMemory
+
+        self.observedEvent = Event()
+        self.observerLock = Lock()
+        # start observing
+        self.work([])
+
+    @staticmethod
+    @abstractmethod
+    def eventObserver(instance: 'MultiprocessObserver'):
         while True:
-            event.wait()
-            with lock:
-                eName, eInfo = self._mpEventSharedMemory[2]["eventName"], self._mpEventSharedMemory[2]["eventInfo"]
-                self._mpEventSharedMemory[2]["eventName"] = ""
-                self._mpEventSharedMemory[2]["eventInfo"] = ""
-                event.clear()
-            self.publishMainLoop(eName, eInfo)
+            instance.observedEvent.wait()
+            with instance.observerLock:
+                instance._eventObserver(instance._sharedMemory)
+            instance.observedEvent.clear()
+
+    @staticmethod
+    @abstractmethod
+    def eventPublisher(instance: 'MultiprocessObserver', *args, **kwargs):
+        with instance.observerLock:
+            instance._eventPublisher(instance._sharedMemory, *args, **kwargs)
+
+        instance.observedEvent.set()

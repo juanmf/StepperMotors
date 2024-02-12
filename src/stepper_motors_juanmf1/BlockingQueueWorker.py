@@ -26,26 +26,14 @@ class UsesSingleThreadedExecutor:
 
 
 class BlockingQueueWorker(UsesSingleThreadedExecutor):
-    """
-    In a scenario of multiprocess:
-    will handle both way communications:
-        Roles:
-            MultiProcessing-BlockingQueueWorker:
-                Receives jobs through Queue
-                Puts results in out Queue.
-                update passed in shared values with passed in function references
-                fwd events to parent process' event dispatcher.
-            Child Classes:
-                update predefined Locked shared objects in their jobHandlers like position in case of controllers.
-                calls passed in function references wit values when makes sense in their jobHandlers.
-            Client code:
-                Starts Process
-                sends jobs with picklable objects
-                update passed in shared values with passed in function references
-    """
+    WORKER_COUNT = 0
 
     def __init__(self, jobConsumer, *, jobQueueMaxSize=2, workerName="John_Doe_Worker", jobQueue=None, executor=None,
                  doneQueue=None, picklizeJobs=False, isProxy=False):
+        with _WORKERS_LOCK:
+            workerName += f"_{BlockingQueueWorker.WORKER_COUNT}"
+            BlockingQueueWorker.WORKER_COUNT += 1
+
         super().__init__(workerName, executor)
         self.picklizeJobs = picklizeJobs
         self.workerName = workerName

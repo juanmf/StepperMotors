@@ -446,33 +446,27 @@ Events get transparently proxied in multiprocessing (at the cost of ~0.0003 seco
 step at 300 PPS).
 
 Example usage with events:
-            
+
 ```Python
 import ctypes
 from functools import partial
 from multiprocess import Value, Event
-            
+
 
 class PolarCoordinatesSample:
 
-    def __init__(self, controllerFactory: MultiProcessingControllerFactory):
-        
-        self.fireReadyEventsAwaited = [
-                                   "azimuthAimingCompletesteppingCompleteAdvance",
-                                   "azimuthAimingCompletesteppingCompleteFinalStep",
-                                   "elevationAimingCompletesteppingCompleteAdvance",
-                                   "elevationAimingCompletesteppingCompleteFinalStep"
-                                   ]         
-        self.elevationDriver = None
-        self.azimuthDriver = None
-        self.azimuthDriverEvent = Event()
-        self.elevationDriverEvent = Event()
-        self.azimuthEventsObserverWorker = None
-        self.elevationEventsObserverWorker = None
-        self.initDrivers(controllerFactory)
-            
-        EventDispatcher.instance().register(self.fireReadyEventsAwaited, self.fireReadyEventHandler)
-    
+  def __init__(self, controllerFactory: MultiProcessingControllerFactory):
+
+    self.fireReadyEventsAwaited = [
+      "azimuthAimingCompletesteppingCompleteAdvance",
+      "azimuthAimingCompletesteppingCompleteFinalStep",
+      "elevationAimingCompletesteppingCompleteAdvance",
+      "elevationAimingCompletesteppingCompleteFinalStep"
+    ]
+    self.elevationDriver = None
+    self.azimuthDriver = None
+    self.initDrivers(controllerFactory)
+    EventDispatcher._instance().register(self.fireReadyEventsAwaited, self.fireReadyEventHandler)
 
     def initDrivers(self, controllerFactory):
         if isinstance(controllerFactory, MultiProcessingControllerFactory):
@@ -482,77 +476,43 @@ class PolarCoordinatesSample:
             self._initLocalDrivers(controllerFactory)
 
     def _initMpDrivers(self, controllerFactory: MultiProcessingControllerFactory):
-        azimuthDriverShared = [Value(ctypes.c_int, 0), self.azimuthDriverEvent]
-        elevationDriverShared = [Value(ctypes.c_int, 0), self.elevationDriverEvent]
+        azimuthDriverShared = Value(ctypes.c_int, 0)
+        elevationDriverShared = Value(ctypes.c_int, 0)
+
+        azimuthObserver = MultiprocessObserver(eventObserver=partial(self.childProcessEventObserver, "azimuth"),
+                                               eventPublisher=self.sharedDataProcessing,
+                                               sharedMemory=azimuthDriverShared)
+        elevationObserver = MultiprocessObserver(eventObserver=partial(self.childProcessEventObserver, "elevation"),
+                                               eventPublisher=self.sharedDataProcessing,
+                                               sharedMemory=elevationDriverShared)
+
         self.azimuthDriver, self.elevationDriver = (controllerFactory
                 .setUpProcess()
-                .withDriver(clientSharedMemory=azimuthDriverShared,
+                .withDriver(multiprocessObserver=azimuthObserver,
                             factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
                             stepperMotor=PG35S_D48_HHC2(True), directionPin=13, stepPin=19, sleepGpioPin=12)
-                .withDriver(clientSharedMemory=elevationDriverShared,
+                .withDriver(multiprocessObserver=elevationObserver,
                             factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
                             stepperMotor=PG35S_D48_HHC2(True), directionPin=24, stepPin=18, sleepGpioPin=4)
                 .spawn())
-            
-        # Dedicated worker thread bloking on azimuthDriverEvent
-        self.azimuthEventsObserverWorker = BlockingQueueWorker(jobConsumer=partial(self.ChildProcessEventObserver,
-                                                                   azimuthDriverShared,
-                                                                   self.azimuthDriver.sharedLock,
-                                                                   "azimuth"),
-                                                               workerName="azimuthEventsObserverWorker")
-            
-        # Dedicated worker thread bloking on elevationDriverEvent    
-        self.elevationEventsObserverWorker = BlockingQueueWorker(jobConsumer=partial(self.ChildProcessEventObserver,
-                                                                     elevationDriverShared,
-                                                                     self.elevationDriver.sharedLock,
-                                                                     "elevation"),
-                                                                 workerName="elevationEventsObserverWorker")
-        # Single job, jobConsumer will loop forever and block on events.
-        self.azimuthEventsObserverWorker.work([])
-        self.elevationEventsObserverWorker.work([])
 
-    def ChildProcessEventObserver(self, sharedData, lock, name):
+    def childProcessEventObserver(self, name, sharedInt):
         """
         Runs in parent process in dedicated Worker thread. Blocks until Events fire.
         """
-        sharedInt = sharedData[0]
-        sharedEvent = sharedData[1]
-        while True:
-            sharedEvent.wait()
-            tprint(f"Parent process notified every {name}'s 100th step. Step: {sharedInt.value}")
-            with lock:
-                sharedEvent.clear()
+        tprint(f"Parent process notified every {name}'s 100th step. Step: {sharedInt.value}")
 
-    def _initLocalDrivers(self, controllerFactory: ControllerFactory):
-        """
-        Not used in multiprocess scenario.
-        """
-        self.azimuthDriver: DRV8825MotorDriver = controllerFactory.getCustomTorqueCharacteristicsDRV8825With(
-            PG35S_D48_HHC2(True), directionPin=13, stepPin=19, sleepGpioPin=12)
-        self.elevationDriver = controllerFactory.getCustomTorqueCharacteristicsDRV8825With(
-            PG35S_D48_HHC2(True), directionPin=24, stepPin=18, sleepGpioPin=4)
-
-            
-    """
-    Setup done, usage follows
-    """
-            
-    def operateDrivers(azimuthDelta, elevationDelta):
-        eventNamePrefix = "AimingComplete"
-        # Events will result in 4 combinations: "[azimuth|elevation]AimingCompletesteppingComplete[Advance|FinalStep]"
-        if azimuthDelta != 0:
-            azimuthJob = self.azimuthDriver.signedSteps(azimuthDelta, self.sharedDataProcessing,
-                                                        jobCompleteEventNamePrefix="azimuth" + eventNamePrefix)
-            self.awaitAzimuthReadyEvents()
-        if elevationDelta != 0:
-            elevationJob = self.elevationDriver.signedSteps(elevationDelta, self.sharedDataProcessing,
-                                                            jobCompleteEventNamePrefix="elevation" + eventNamePrefix)
-            self.awaitElevationReadyEvents()
-            
-            
-            
     @staticmethod
-    def sharedDataProcessing(currentPosition, targetPosition, direction, sharedMemory=None):
+    def sharedDataProcessing(sharedMemory, currentPosition):
+
+        # Client process knows what's in sharedMemory, not Drivers.
+
+        # Prints every 100 steps.
+        tprint(f"Running callback from Navigation stepping in child process \n "
+               f"{currentPosition, sharedMemory}")
+        
+    @staticmethod
+    def steppingCallback(currentPosition, targetPosition, direction, multiprocessObserver: MultiprocessObserver=None):
         """
         Static method, uses shared state, see :func:`~self._initMpDrivers()`. invoked in child process.
         Uses `Event.set()` to notify Parent process' observer see :func:`~ChildProcessEventObserver`.
@@ -560,21 +520,41 @@ class PolarCoordinatesSample:
           fn(pulsingController.controller.getCurrentPosition(),
              pulsingController.targetPosition,
              pulsingController.controller.accelerationStrategy.realDirection,
-             pulsingController.controller.sharedMemory)  # Only provided in multiprocessing scenario. Method runs in
-                                                         # child process, you need to sync on parent process.
+             pulsingController.controller.multiprocessObserver)  # Only provided in multiprocessing scenario. Method 
+                                                                 # runs in child process.
         """
-        if not sharedMemory:
+        if multiprocessObserver:
             # Important, as in local process scenario sharedMemory is None. see :func:`~self._initLocalDrivers()`
-            return
-        # Client process knows what's in sharedMemory, not Drivers.
-        sharedMemory[0].value += 1
-        if sharedMemory[0].value % 100 == 0:
-            # Prints every 100 steps.
-            tprint(f"Running callback from Navigation stepping in child process \n "
-                   f"{currentPosition, targetPosition, direction, sharedMemory}")
-            sharedMemory[1].set()  # setting Event for Parent process observer.
 
-            
+            multiprocessObserver._sharedMemory.value += 1
+            if multiprocessObserver._sharedMemory.value % 100 == 0:
+                MultiprocessObserver.eventPublisher(multiprocessObserver, currentPosition)
+
+  def _initLocalDrivers(self, controllerFactory: ControllerFactory):
+    """
+    Not used in multiprocess scenario.
+    """
+    self.azimuthDriver: DRV8825MotorDriver = controllerFactory.getCustomTorqueCharacteristicsDRV8825With(
+      PG35S_D48_HHC2(True), directionPin=13, stepPin=19, sleepGpioPin=12)
+    self.elevationDriver = controllerFactory.getCustomTorqueCharacteristicsDRV8825With(
+      PG35S_D48_HHC2(True), directionPin=24, stepPin=18, sleepGpioPin=4)
+
+  """
+  Setup done, usage follows
+  """
+
+  def operateDrivers(azimuthDelta, elevationDelta):
+    eventNamePrefix = "AimingComplete"
+    # Events will result in 4 combinations: "[azimuth|elevation]AimingCompletesteppingComplete[Advance|FinalStep]"
+    if azimuthDelta != 0:
+      azimuthJob = self.azimuthDriver.signedSteps(azimuthDelta, self.steppingCallback,
+                                                  jobCompleteEventNamePrefix="azimuth" + eventNamePrefix)
+      self.awaitAzimuthReadyEvents()
+    if elevationDelta != 0:
+      elevationJob = self.elevationDriver.signedSteps(elevationDelta, self.steppingCallback,
+                                                      jobCompleteEventNamePrefix="elevation" + eventNamePrefix)
+      self.awaitElevationReadyEvents()
+
 ```
 
 High level flow
@@ -603,84 +583,112 @@ Sample app  `PolarCoordinatesSample` logs output (edited `...`, `# comments`)  i
 get a sense of sequence of events.
 
 ```commandline
-
-INFO:root:
-@start thread dump Process-2 => DRV8825MotorDriver_0__0 ========================================
+"""
+This demo sets up a notification every 100th step.
+"""
+@start thread dump MainProcess => MultiprocessObserver_0_2_0 ========================================
 ==========================================================================
-[09:26:55.620709] Waking! Calling setSleepMode with sleepOn=False
+[19:34:18.635397] Parent process notified every azimuth's 100th step. Step: 100
 
-[09:26:55.620774] Setting Sleep pin 12 to 1
+[19:34:18.925858] Parent process notified every azimuth's 100th step. Step: 200
 
-[09:27:00.504737] Setting Sleep pin 12 to 0
-
-[09:27:00.504841] waiting for MultiProcess jobs <stepper_motors_juanmf1.BlockingQueueWorker.MpQueue object at 0x7f70b161d0>
-
-@end thread dump DRV8825MotorDriver_0__0 =========================================
-
-@start thread dump Process-2 => SynchronizedNavigation_0 ========================================
-==========================================================================
-[09:26:55.621547] Setting direction pin 13 1.
-
-[09:26:55.621589] State Rest -> RampingUp
-
-[09:26:55.629370] State RampingUp -> Steady
-
-[09:26:55.908247] Running callback from Navigation stepping in child process 
- (100, 1698.0, 1, [<Synchronized wrapper for c_int(100)>, <Event at 0x7f79ba5a90 unset>])
+[19:34:19.213996] Parent process notified every azimuth's 100th step. Step: 300
 ...
 
-[09:27:00.213944] Running callback from Navigation stepping in child process 
- (1600, 1698.0, 1, [<Synchronized wrapper for c_int(1600)>, <Event at 0x7f79ba5a90 unset>])
+@end thread dump MultiprocessObserver_0_2_0 =========================================
 
-@end thread dump SynchronizedNavigation_0 =========================================
-
-@start thread dump Process-2 => EventDispatcher__0 ========================================
+@start thread dump MainProcess => MultiprocessObserver_1_3_0 ========================================
 ==========================================================================
-[09:27:00.467050] dispatchMainLoop eventName: azimuthAimingCompletesteppingCompleteAdvance, eventInfo: {'position': 1688}
+[19:34:19.153513] Parent process notified every elevation's 100th step. Step: 100
 
-[09:27:00.467087] Missed event azimuthAimingCompletesteppingCompleteAdvance
-
-[09:27:00.501334] dispatchMainLoop eventName: azimuthAimingCompletesteppingCompleteFinalStep, eventInfo: {'position': 1698}
-
-[09:27:00.501363] Missed event azimuthAimingCompletesteppingCompleteFinalStep
-
-@end thread dump EventDispatcher__0 =========================================
-
-@start thread dump MainProcess => azimuthEventsObserverWorker_0 ========================================
-==========================================================================
-[09:26:56.770120] Parent process notified every azimuth's 100th step. Step: 400
+[19:34:19.441269] Parent process notified every elevation's 100th step. Step: 200
 ...
 
-[09:27:00.214069] Parent process notified every azimuth's 100th step. Step: 1600
-
-@end thread dump azimuthEventsObserverWorker_0 =========================================
-
-@start thread dump MainProcess => EventDispatcher__0 ========================================
+@start thread dump Process-2 => SynchronizedNavigation_8_0 ========================================
 ==========================================================================
+[19:34:23.468511] Running callback from Navigation stepping in child process 
+ (1600, <Synchronized wrapper for c_int(1600)>)
+
+@end thread dump SynchronizedNavigation_8_0 =========================================
+
+@start thread dump Process-2 => DRV8825MotorDriver_0__7_0 ========================================
+==========================================================================
+[19:34:18.347474] Waking! Calling setSleepMode with sleepOn=False
+
+[19:34:18.347537] Setting Sleep pin 12 to 1
+
+[19:34:23.349346] Setting Sleep pin 12 to 0
+
+[19:34:23.349519] waiting for MultiProcess jobs <stepper_motors_juanmf1.BlockingQueueWorker.MpQueue object at 0x7f72b0c750>
+
+@end thread dump DRV8825MotorDriver_0__7_0 =========================================
+@start thread dump Process-2 => DRV8825MotorDriver_1__9_0 ========================================
+==========================================================================
+[19:34:18.865536] Waking! Calling setSleepMode with sleepOn=False
+
+[19:34:18.865577] Setting Sleep pin 4 to 1
+
+@end thread dump DRV8825MotorDriver_1__9_0 =========================================
+
+@start thread dump Process-2 => SynchronizedNavigation_8_0 ========================================
+==========================================================================
+[19:34:18.348365] Setting direction pin 13 1.
+
+[19:34:18.348405] State Rest -> RampingUp
+
+[19:34:18.356172] State RampingUp -> Steady
+
+[19:34:18.635059] Running callback from Navigation stepping in child process 
+ (100, <Synchronized wrapper for c_int(100)>)
+
+[19:34:18.865873] Setting direction pin 24 1.
+
+[19:34:18.865890] State Rest -> RampingUp
+
+[19:34:18.873814] State RampingUp -> Steady
+
+[19:34:18.925689] Running callback from Navigation stepping in child process 
+ (200, <Synchronized wrapper for c_int(200)>)
+...
 
 """
-Proxied events in MainProcess, Originally fired in Child Process.
+No subscriptors in child process for event "azimuthAimingCompletesteppingCompleteAdvance"  
+"""
+@start thread dump Process-2 => EventDispatcher__5_0 ========================================
+==========================================================================
+[19:34:23.205045] dispatchMainLoop eventName: azimuthAimingCompletesteppingCompleteAdvance, eventInfo: {'position': 1688}
+
+[19:34:23.205074] Missed event azimuthAimingCompletesteppingCompleteAdvance
+
+[19:34:23.250897] dispatchMainLoop eventName: azimuthAimingCompletesteppingCompleteFinalStep, eventInfo: {'position': 1698}
+
+[19:34:23.250934] Missed event azimuthAimingCompletesteppingCompleteFinalStep
+
+@end thread dump EventDispatcher__5_0 =========================================
+
+
+"""
+Child Process events got propagated to MainProcess EventDispatcher, here events do have subscriptors in user App. 
 """
 
-[09:27:00.473943] dispatchMainLoop eventName: azimuthAimingCompletesteppingCompleteAdvance, eventInfo: {'position': 1688}
+@start thread dump MainProcess => EventDispatcher__0_0 ========================================
+==========================================================================
+[19:34:23.212747] dispatchMainLoop eventName: azimuthAimingCompletesteppingCompleteAdvance, eventInfo: {'position': 1688}
+
+[19:34:23.352251] dispatchMainLoop eventName: azimuthAimingCompletesteppingCompleteFinalStep, eventInfo: {'position': 1698}
+
+[19:34:23.725443] dispatchMainLoop eventName: elevationAimingCompletesteppingCompleteAdvance, eventInfo: {'position': 1688}
 
 """
-Following is an App level event, that fired after consumning all drivers' *CompletesteppingCompleteAdvance.
+User app level waited for both drivers to be comlete before firing application level event "AimingComplete"
 """
-[09:27:00.474164] dispatchMainLoop eventName: AimingComplete, eventInfo: {'isReady': True}
 
-[09:27:00.474177] Missed event AimingComplete  # No subscribers registered.
+[19:34:23.725647] dispatchMainLoop eventName: AimingComplete, eventInfo: {'isReady': True}
 
-[09:27:00.508121] dispatchMainLoop eventName: azimuthAimingCompletesteppingCompleteFinalStep, eventInfo: {'position': 1698}
+[19:34:23.725662] Missed event AimingComplete
+...
+@end thread dump EventDispatcher__0_0 =========================================
 
-[09:27:00.508335] dispatchMainLoop eventName: AimingCompleteFinalStep, eventInfo: {'isReady': True, 'polarPosition': (1698, 0), 'originalCapturePixel': (1, 2)}
-
-[09:27:00.508349] Missed event AimingCompleteFinalStep  # No subscribers registered.
-
-@end thread dump EventDispatcher__0 =========================================
-
-===================================================================================
-Thread prints Dump Complete =======================================================
 ```
 
 ## Contributing

@@ -41,7 +41,7 @@ class Navigation:
         return self.get_completed_future()
 
     @staticmethod
-    def pulseController(controller):
+    def pulseController(controller: MotorDriver):
         # tprint(f"Setting step pin {controller.stepGpioPin} HIGH.")
         controller.pulseStart()
         controller.usleep(controller.PULSE_TIME_MICROS)
@@ -80,10 +80,10 @@ class StaticNavigation(Navigation):
             # fn should not consume many CPU instructions to avoid delays between steps.
             if fn:
                 fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection,
-                   controller.sharedMemory)
+                   controller.multiprocessObserver)
 
             if abs(steps - i) == eventInAdvanceSteps:
-                EventDiapatcher.instance().publishMainLoop(eventName + "Advance", {'position': i})
+                EventDiapatcher._instance().publishMainLoop(eventName + "Advance", {'position': i})
 
         accelerationStrategy.done()
         controller.setDirection(GPIO.LOW)
@@ -117,11 +117,11 @@ class DynamicNavigation(Navigation):
             # fn should not consume many CPU instructions to avoid delays between steps.
             if fn:
                 fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection,
-                   controller.sharedMemory)
+                   controller.multiprocessObserver)
 
             if (abs(targetPosition - position) == eventInAdvanceSteps
                 and cmp(targetPosition, position) == controller.accelerationStrategy.realDirection):
-                EventDiapatcher.instance().publishMainLoop(eventName + "Advance", {'position': position})
+                EventDiapatcher._instance().publishMainLoop(eventName + "Advance", {'position': position})
 
 
         # todo: check if still needed.
@@ -249,7 +249,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                 pulsingController.fn(pulsingController.controller.getCurrentPosition(),
                                      pulsingController.targetPosition,
                                      pulsingController.controller.accelerationStrategy.realDirection,
-                                     pulsingController.controller.sharedMemory)
+                                     pulsingController.controller.multiprocessObserver)
 
             if pulsingController.eventInAdvanceSteps is not None:
                 # Called while Stepper is in flight to finish this step.

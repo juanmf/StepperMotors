@@ -606,9 +606,9 @@ class DynamicDelayPlanner(DelayPlanner):
 
     class Rest(State):
         def __new__(cls, *args, **kwargs):
-            if not hasattr(cls, 'instance'):
-                cls.instance = super().__new__(cls)
-            return cls.instance
+            if not getattr(cls, '_instance', None):
+                cls._instance = super().__new__(cls)
+            return cls._instance
 
         def transition(self, currentPosition, targetPosition, accelerationStrategy, directionChangeListener):
             if (currentPosition == targetPosition) or targetPosition is None or currentPosition is None:
@@ -623,9 +623,9 @@ class DynamicDelayPlanner(DelayPlanner):
 
     class RampingUp(State):
         def __new__(cls, *args, **kwargs):
-            if not hasattr(cls, 'instance'):
-                cls.instance = super().__new__(cls)
-            return cls.instance
+            if not getattr(cls, '_instance', None):
+                cls._instance = super().__new__(cls)
+            return cls._instance
 
         def __init__(self):
             self.fromRest = True
@@ -654,9 +654,9 @@ class DynamicDelayPlanner(DelayPlanner):
 
     class RampingDown(State):
         def __new__(cls, *args, **kwargs):
-            if not hasattr(cls, 'instance'):
-                cls.instance = super().__new__(cls)
-            return cls.instance
+            if not getattr(cls, '_instance', None):
+                cls._instance = super().__new__(cls)
+            return cls._instance
 
         def transition(self, currentPosition, targetPosition, accelerationStrategy, directionChangeListener):
             pendingSteps = abs(currentPosition - targetPosition)
@@ -681,9 +681,9 @@ class DynamicDelayPlanner(DelayPlanner):
 
     class Steady(State):
         def __new__(cls, *args, **kwargs):
-            if not hasattr(cls, 'instance'):
-                cls.instance = super().__new__(cls)
-            return cls.instance
+            if not getattr(cls, '_instance', None):
+                cls._instance = super().__new__(cls)
+            return cls._instance
 
         def transition(self, currentPosition, targetPosition, accelerationStrategy, directionChangeListener):
             pendingSteps = abs(currentPosition - targetPosition)

@@ -26,6 +26,7 @@ class DriverSharedPositionStruct(ctypes.Structure):
 # Todo: migrate to https://pypi.org/project/python-periphery/
 class MotorDriver(BlockingQueueWorker):
     INSTANCES_COUNT = 0
+    PULSE_TIME_MICROS = None
 
     def __init__(self, *,workerName, jobQueueMaxSize=2, jobQueue=None, sharedMemory=None, isProxy=False):
         workerName = f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_" \
@@ -36,12 +37,36 @@ class MotorDriver(BlockingQueueWorker):
         if sharedMemory is not None:
             self.sharedLock = sharedMemory[0]
             self.sharedPosition = sharedMemory[1]
-            self.sharedMemory = sharedMemory[2:]
+            self.multiprocessObserver = sharedMemory[2]
         else:
-            self.sharedMemory = self.sharedPosition = self.sharedLock = None
+            self.multiprocessObserver = self.sharedPosition = self.sharedLock = None
 
     @abstractmethod
     def _operateStepper(self, direction, steps):
+        pass
+
+    @abstractmethod
+    def getCurrentPosition(self):
+        pass
+
+    @abstractmethod
+    def setDirection(self, directionState):
+        pass
+
+    @abstractmethod
+    def pulseStart(self):
+        """
+        In most controllers this would mean set step pint to HIGH
+        @return:
+        """
+        pass
+
+    @abstractmethod
+    def pulseStop(self):
+        """
+        In most controllers this would mean set step pint to LOW
+        @return:
+        """
         pass
 
     @staticmethod
@@ -170,7 +195,7 @@ class BipolarStepperMotorDriver(MotorDriver):
                          if workerName is None else workerName, jobQueue=jobQueue, sharedMemory=sharedMemory,
                          isProxy=isProxy)
         self._steppingCompleteEventName = steppingCompleteEventName
-        self.INSTANCES_COUNT += 1
+        MotorDriver.INSTANCES_COUNT += 1
         self.stepperMotor = stepperMotor
         self.accelerationStrategy = accelerationStrategy
         self.enableGpioPin = enableGpioPin
@@ -315,22 +340,6 @@ class BipolarStepperMotorDriver(MotorDriver):
     def setEnableMode(self, enableOn=True):
         pass
 
-    @abstractmethod
-    def pulseStart(self):
-        """
-        In most controllers this would mean set step pint to HIGH
-        @return:
-        """
-        pass
-
-    @abstractmethod
-    def pulseStop(self):
-        """
-        In most controllers this would mean set step pint to LOW
-        @return:
-        """
-        pass
-
 
 class DRV8825MotorDriver(BipolarStepperMotorDriver):
     """
@@ -450,7 +459,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         # tprint(f"Setting step pin {controller.stepGpioPin} HIGH.")
         GPIO.output(self.stepGpioPin, GPIO.HIGH)
 
-    @abstractmethod
     def pulseStop(self):
         """
         In most controllers this would mean set step pint to LOW
