@@ -1,0 +1,71 @@
+@startuml
+'https://plantuml.com/class-diagram
+class EventDispatcher as "EventDispatcher" <<Singleton>> {
+- _mpEventSharedMemory // Read only on MainProcess
+--
++ publishMainLoop()
++ register(eventName, callee)
+- _waitChildProcessEvent()
+}
+
+class MultiprocessObserver {
+_eventObserver: Callable
+_eventPublisher: Callable
+observedEvent = Event()
+observerLock = Lock()
+--
++ {static} eventObserver()
++ {static} eventPublisher()
+}
+
+abstract class MotorDriver as "MotorDriver" {
+--
+## stepping method arguments, [optional]
+## (steps, [fn, eventNamePrefix, eventInAdvanceSteps])
+signedSteps()
+stepClockWise()
+stepCounterClockWise()
+- _operateStepper(PolarCoordinatesSample.sharedDataProcessing)
+}
+
+class MultiProcessingControllerFactory #Orange {
+setUpProcess(self) -> 'MultiProcessingControllerFactory':
+withDriver(self, multiprocessObserver: MultiprocessObserver,
+spawn(self):
+
+getMpCustomTorqueCharacteristicsDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionPin, stepPin,
+getMpLinearDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionPin, stepPin,
+getMpExponentialDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionPin, stepPin,
+}
+
+note right: Creates Driver in child process and \n proxy driver in parent process
+
+class SynchronizedControllerFactory {
+getDelayPlanner()
+getNavigation()
+}
+
+
+class BlockingQueueWorker {
+    - _jobQueue: queues.Queue|multiprocess.Queue
+    startWorker()
+    killWorker()
+}
+
+class stepperMotor {
+maxPPS
+minPPS
+}
+
+EventDispatcher -up-|> BlockingQueueWorker
+MotorDriver -up-|> BlockingQueueWorker
+MultiprocessObserver -up|> BlockingQueueWorker
+SynchronizedControllerFactory -up-|> ControllerFactory
+MultiProcessingControllerFactory -up-|> SynchronizedControllerFactory
+
+EventDispatcher +-- MultiprocessObserver
+MotorDriver *-- "1" stepperMotor
+MotorDriver *-- "1" AccelerationStrategy
+
+ControllerFactory .up.> MotorDriver : creates
+@enduml

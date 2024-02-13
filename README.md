@@ -6,24 +6,25 @@ a versatile tool for managing a set of stepper motors (through their drivers) in
 scenarios.
 
 A few distinct concepts have been implemented:
-* Driver (or Controller, used interchangeably), each instantiated driver will behave as a dedicated single thread worker
+* `Driver` (or Controller, used interchangeably), each instantiated driver will behave as a dedicated single thread worker
   (see `BlockingQueueWorker`) which receives steps jobs through a shared queue, in an attempt decouple steps timing 
   from the rest of the system, (here the GIL imposes some challenged in theory).
-* Stepper Motor, encapsulates the motor characteristics, like min and max PPS (pulses per second), and instantaneous  
+* `StepperMotor`, encapsulates the motor characteristics, like min and max PPS (pulses per second), and instantaneous  
   torque. A Generic motor is implemented that can be constructed with specifics in case of lacking implementation of  
   your motor (you are welcome to add it).
-* Navigation, The driver can navigate from A to B, setting direction & sending pulses to the motor, statically (as in 
-  a 3D printer scenario where planning is made up front) or dynamically (for interactive or event based systems that
-  need to quickly respond to unplanned speed and direction changes).
-* Acceleration strategies or profiles, handle how to reach max speeds for the motor. Linear, Exponential & Custom (which
+* `Navigation`, The driver can navigate from A to B, setting direction & sending pulses to the motor, statically (as in 
+  a 3D printer scenario where planning is made up front), dynamically (for interactive or event based systems that
+  need to quickly respond to unplanned speed and direction changes), or centrally synchronized for several motors ran 
+  in choir (this is also dynamic).
+* `AccelerationStrategies` or profiles, handle how to reach max speeds for the motor. Linear, Exponential & Custom (which
   takes motor's instantaneous torque or a list of transformations as input to max out your motor capabilities). Custom
   acceleration strategy has a pre-requisite that you use the Benchmark module (see bellow) to find optimal  
   transformations for your motor, in a production setup (proper load applied). All changes are effected as a function of
   current motor' speed in PPS. (other systems use curves as function of time. I found that impractical)
-  * DelayPlanners (in tandem with Navigation modes) enable Drivers to handle inertia gracefully either in a static or 
+  * `DelayPlanners` (in tandem with Navigation modes) enable Drivers to handle inertia gracefully either in a static or 
     dynamic context. DelayPlanner implementations determine if it's time to start breaking, speeding up or stay steady.
     Acceleration strategies effect proper changes to speed. 
-* Benchmark, a stress test module to find your motor's (under current load), min & max speeds, and instantaneous torque 
+* `Benchmark`, a stress test module to find your motor's (under current load), min & max speeds, and instantaneous torque 
   characteristics, all in terms of PPS. For instantaneous torque characteristics the output (with format
   `[(minPPS, incrementPPS_1), (minPPS + incrementPPS_1, incrementPPS_2), ..., (maxPPS, 0)]`) can be
   used as `YourStepperMotorSubClass.TORQUE_CHARACTERISTICS` or as an input to `CustomAccelerationPerPps` acceleration 
@@ -33,7 +34,11 @@ A few distinct concepts have been implemented:
     * Raspberry Pi 4B with,
     * DRV8825 driver board
     * PG35S_D48_HHC2 stepper motor 
- 
+* `EventDispatcher` centralized events broker Drivers use to notify any subscriber if steppingComplete events, finalStep   
+  or in advance (10 steps in advance by default). your app can also use it to publish and subscribe to app level events.  
+  It's a neat way to allow for extension points without modifying working classes. In multiprocess scenario 
+ `EventDispatcher` uses `MultiprocessObserver` to gain awareness of, and proxy events from, child dedicated process 
+  running motor drivers, so in effect, driver events are (re)published in MainProcess where your app resides. 
 
 ![doc/collab.png](./doc/collab.png)
 
@@ -460,7 +465,7 @@ class PolarCoordinatesSample:
     self.elevationDriver = None
     self.azimuthDriver = None
     self.initDrivers(controllerFactory)
-    EventDispatcher._instance().register(self.fireReadyEventsAwaited, self.fireReadyEventHandler)
+    EventDispatcher.instance().register(self.fireReadyEventsAwaited, self.fireReadyEventHandler)
 
     def initDrivers(self, controllerFactory):
         if isinstance(controllerFactory, MultiProcessingControllerFactory):
@@ -537,7 +542,7 @@ class PolarCoordinatesSample:
   Setup done, usage follows
   """
 
-  def operateDrivers(azimuthDelta, elevationDelta):
+  def operateDrivers(self, azimuthDelta, elevationDelta):
     eventNamePrefix = "AimingComplete"
     # Events will result in 4 combinations: "[azimuth|elevation]AimingCompletesteppingComplete[Advance|FinalStep]"
     if azimuthDelta != 0:
