@@ -37,12 +37,6 @@ A few distinct concepts have been implemented:
 
 ![doc/collab.png](./doc/collab.png)
 
->Orange: 
->* Driver is the mains class your application will interact with.
->* Benchmark Standalone class for discovering motor limits. 
->
-> Blue the factory for easy construction/child process setup.
-
 ## Install
 ### Happy path
 
