@@ -48,17 +48,6 @@ class Navigation:
         controller.pulseStop()
 
     @staticmethod
-    def pulseControllerStart(controller):
-        # tprint(f"Setting step pin {controller.stepGpioPin} HIGH.")
-        controller.pulseStart()
-        return time.monotonic_ns()
-
-    @staticmethod
-    def pulseControllerStop(controller):
-        controller.pulseStop()
-        return time.monotonic_ns()
-
-    @staticmethod
     def isInterruptible():
         pass
 

@@ -18,10 +18,17 @@ class EventDispatcher as "EventDispatcher" <<Singleton>> {
 + register(eventName, callee)
 - _waitChildProcessEvent()
 }
-class BlockingQueueWorkerEd as "BlockingQueueWorker" <<Instance>> {
-+ work() // caller thread, puts in jobQueue
-- _doConsumeJob(_waitChildProcessEvent: Callable) // pops jobQueue
+
+class MultiprocessObserver {
+_eventObserver: Callable
+_eventPublisher: Callable
+observedEvent = Event()
+observerLock = Lock()
+--
++ {static} eventObserver()
++ {static} eventPublisher()
 }
+
 abstract class MotorDriver1 as "MotorDriver" {
 --
 ## stepping method arguments, [optional]
@@ -47,13 +54,13 @@ MotorDriver_Elevation_proxy ..> MotorDriver
 MotorDriver_Azimuth_proxy ..> MotorDriver
 
 class PolarCoordinatesSample <<User/Client code>> {
-        self.fireReadyEventsAwaited = ["azimuthAimingCompletesteppingCompleteAdvance",...]
-        self.elevationDriver  // MainProcess driver proxy
-        self.azimuthDriver  // MainProcess driver proxy
-        self.azimuthDriverEvent = Event()
-        self.elevationDriverEvent = Event()
-        self.azimuthEventsObserverWorker = None
-        self.elevationEventsObserverWorker = None
+        fireReadyEventsAwaited = ["azimuthAimingCompletesteppingCompleteAdvance",...]
+        elevationDriver  // MainProcess driver proxy
+        azimuthDriver  // MainProcess driver proxy
+        azimuthDriverEvent = Event()
+        elevationDriverEvent = Event()
+        azimuthEventsObserverWorker = None
+        elevationEventsObserverWorker = None
 --
 ## waits on shared `multiprocess.Event` set by \n## sharedDataProcessing in P2
 +ChildProcessEventObserver()
@@ -108,7 +115,7 @@ jobQueue // Shared multiprocess blocking queue
 
 }
 PolarCoordinatesSample .up.> MultiProcessingControllerFactory : 1) setUpProcess()\nwithDriver(<azimuth>)\nwithDriver(<elevation>)\nspawn()
-PolarCoordinatesSample ..> EventDispatcher : register(["steppingCompleteAdvance",\n "steppingCompleteFinalStep",...], \n self.fireReadyEventHandler)
+PolarCoordinatesSample ..> EventDispatcher : register(["steppingCompleteAdvance",\n "steppingCompleteFinalStep",...], \n fireReadyEventHandler)
 MultiProcessingControllerFactory .right..> Process2
 
 PolarCoordinatesSample ..> MotorDriver_Elevation_proxy : work()
@@ -122,14 +129,14 @@ MotorDriver_Azimuth ..> BasicSynchronizedNavigation: go(steps)
 MotorDriver_Azimuth .up.> "EventDispatcher2" : publishMainLoop([prefix]+"steppingCompleteAdvance")\npublishMainLoop([prefix]+"steppingCompleteFinalStep")
 MotorDriver_Azimuth .up.> PolarCoordinatesSample2 : sharedDataProcessing()
 
-EventDispatcher ..> EventDispatcher : publishMainLoop() \n// Proxying child process events \n Notified with sharedMemory
 EventDispatcher ..> PolarCoordinatesSample : notify("steppingCompleteAdvance")
 
 MpQueue -up-|>  multiprocess.Queue
-EventDispatcher2 .up.> "set()   \n" Event
-BlockingQueueWorkerEd ..up..* EventDispatcher : <
-BlockingQueueWorkerEd .left..> EventDispatcher : publishMainLoop("steppingCompleteAdvance" \n// proxyEventInChildPricess)
-BlockingQueueWorkerEd .down..> "clear()   \n" Event
+MultiprocessObserver ..up..* EventDispatcher : <
+MultiprocessObserver .left..> EventDispatcher : publishMainLoop("steppingCompleteAdvance" \n// proxyEventInChildPricess)
+MultiprocessObserver .down..> "clear()\n set() \n\n" Event
+MultiprocessObserver <.. EventDispatcher2 : eventPublisher()
+
 
 note as N1
 Proxy puts jobs in Queue but
@@ -138,9 +145,8 @@ end note
 
 note as N2
 EventDispatcher always notifies locally. Child Process'
-ED also updates shared memory Values with event details
- and signals with `process.Event.set()`.
-MainProcess waits on process.Event to proxy events upstream
+EventDispatcher also updates shared memory Values with
+event details and MultiprocessObserver signals MainProcess
 end note
 
 N1 .up.> MotorDriver_Azimuth_proxy

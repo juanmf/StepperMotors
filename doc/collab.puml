@@ -1,7 +1,36 @@
 @startuml
+
+note as N3  #grey
+<size:22>**Color codes:**
+<size:18><color APPLICATION >**INITIALIZATION** </color>
+<size:18><color orange >**Your App will interact heavily with** </color>
+<size:18><color LemonChiffon >**Your App might want to interact if complex** </color>
+<size:18><color yellow >**Leaf implementations/Extension points. You might need to add sibling classes** </color>
+end note
+
 class BlockingQueueWorker {
     startWorker()
     killWorker()
+}
+
+class EventDispatcher <<Singleton>> #LemonChiffon {
+multiprocessObserver: MultiprocessObserver
++ publishMainLoop(eventName, eventInfo)
++ register(eventName: list, callee): calleeId
++ unregister(calleeId)
++ getMultiprocessObserver()
++ {static} instance(multiprocessObserver=None)
+- **_dispatchMainLoop()** // Worker job consumer
+}
+
+class MultiprocessObserver #LemonChiffon {
+_eventObserver: Callable
+_eventPublisher: Callable
+observedEvent = Event()
+observerLock = Lock()
+--
++ {static} **eventObserver()** // Worker job consumer
++ {static} eventPublisher()
 }
 class UsesSingleThreadedExecutor
 class ThreadPoolExecutorStackTraced
@@ -13,17 +42,22 @@ class ControllerFactory #APPLICATION {
 }
 class StaticControllerFactory
 class DynamicControllerFactory
-class MultiProcessingControllerFactory {
+class MultiProcessingControllerFactory #Orange {
     +setUpProcess()
     +withDriver()
-    +spawn()
+    +spawn(): list[BipolarStepperMotorDriver] // proxies
     -Unpacker.Unpack() // init Drivers \nin childProcess
 }
 
-class Navigation
+class Navigation {
++ go()
++ {static} pulseController(motorDriver)
+}
 class StaticNavigation
 class DynamicNavigation
-class BasicSynchronizedNavigation
+class BasicSynchronizedNavigation <<Singleton>> {
+- **__doGo(pulsingController)** // Worker job consumer
+}
 
 class Benchmark #Orange {
 findMinPps()
@@ -32,16 +66,45 @@ findTransformations() // Max Accelerations
 }
 
 class BipolarStepperMotorDriver #Orange{
-    signedSteps(steps, fn=None)
-    stepClockWise(steps, fn=None)
-    stepCounterClockWise(steps, fn=None)
+     - directionGpioPin
+     - stepGpioPin
+     - sleepGpioPin=None
+     - enableGpioPin=None
+     - stepsMode="Full"
+     - modeGpioPins=[]
+     - steppingCompleteEventName="steppingComplete"
+     ## multiprocessing attributes:
+     - sharedMemory=None
+     - isProxy=False
+     --
+    + signedSteps(steps, fn=None)
+    + stepClockWise(steps, fn=None)
+    + stepCounterClockWise(steps, fn=None)
+    + pulseStart()
+    + pulseStop()
+    - **_operateStepper()** // Worker job consumer
 }
 
-class DRV8825MotorDriver
+class DRV8825MotorDriver #Yellow {
+setSleepMode(sleepOn=False)
+setEnableMode(enableOn=True)
+pulseStart()
+pulseStop()
+}
 
 class StepperMotor
-class PG35S_D48_HHC2
-class GenericStepper
+class PG35S_D48_HHC2 #Yellow {
+    ## DatasheetMax is 1500
+    LOADED_MAX_PPS = 900
+    LOADED_SLEEP = 1 / 900
+    NOLOAD_MAX_PPS = 800
+    NOLOAD_SLEEP = 1 / 800
+}
+
+class GenericStepper #Yellow {
+maxPps
+minPps
+}
 
 class AccelerationStrategy {
     decreaseSleepTime()
@@ -67,63 +130,91 @@ class DelayPlanner {
 }
 
 class StaticDelayPlanner
-class DynamicDelayPlanner
-class State {
-    effectSpeed()
+class DynamicDelayPlanner {
+    - state: State
 }
+class State {
+    + effectSpeed()
+    + transition()
+}
+class Rest <<Singleton>>
+class RampingUp <<Singleton>>
+class RampingDown <<Singleton>>
+class Steady <<Singleton>>
+
+mix_actor ClientApp
 
 ''' structure
 ThreadPoolExecutorStackTraced --|> ThreadPoolExecutor
 UsesSingleThreadedExecutor --|> ThreadPoolExecutorStackTraced
 BlockingQueueWorker --|> UsesSingleThreadedExecutor
 BipolarStepperMotorDriver ---|> BlockingQueueWorker
+EventDispatcher -up-|> BlockingQueueWorker
 
 PG35S_D48_HHC2 -up-|> StepperMotor
 GenericStepper -up-|> StepperMotor
 
-StaticControllerFactory -left-|> ControllerFactory
-DynamicControllerFactory -left-|> ControllerFactory
-SynchronizedControllerFactory -left-|> ControllerFactory
-MultiProcessingControllerFactory -left-|> SynchronizedControllerFactory
+StaticControllerFactory -up-|> ControllerFactory
+DynamicControllerFactory -up-|> ControllerFactory
+SynchronizedControllerFactory -up-|> ControllerFactory
+MultiProcessingControllerFactory -down-|> SynchronizedControllerFactory
 
 DRV8825MotorDriver -up-|> BipolarStepperMotorDriver
 
 StaticDelayPlanner -down-|> DelayPlanner
-DynamicDelayPlanner -up-|> DelayPlanner
-DynamicDelayPlanner +-- State
+DynamicDelayPlanner -down-|> DelayPlanner
+DynamicDelayPlanner +-right- State
 
-Rest -up--|> State
-RampingUp -up-|> State
-RampingDown -up--|> State
-Steady -up-|> State
+Rest -down--|> State
+RampingUp -down-|> State
+RampingDown -down--|> State
+Steady -left-|> State
 
 StaticNavigation -down-|> Navigation
-DynamicNavigation -up-|> Navigation
-BasicSynchronizedNavigation -up-|> Navigation
-BasicSynchronizedNavigation -up-|> BlockingQueueWorker
+DynamicNavigation -down-|> Navigation
+BasicSynchronizedNavigation -down-|> Navigation
+BasicSynchronizedNavigation -down-|> BlockingQueueWorker
+MultiprocessObserver -up-|> BlockingQueueWorker
+MultiprocessObserver "1 " -up-* EventDispatcher
 
-LinearAcceleration ---|> AccelerationStrategy
-ExponentialAcceleration --|> AccelerationStrategy
-CustomAccelerationPerPps --|> AccelerationStrategy
-InteractiveAcceleration ---|> AccelerationStrategy
+LinearAcceleration -up--|> AccelerationStrategy
+ExponentialAcceleration -up-|> AccelerationStrategy
+CustomAccelerationPerPps -up--|> AccelerationStrategy
+InteractiveAcceleration -up-|> AccelerationStrategy
+BasicSynchronizedNavigation "\n    1" +-- "*  " PulsingController
+PulsingController *-- "1    \n" BipolarStepperMotorDriver
 
 ''' Relations
-BipolarStepperMotorDriver -left-> Navigation
-BipolarStepperMotorDriver -up-> AccelerationStrategy
-BipolarStepperMotorDriver -right-> StepperMotor
+EventDispatcher .down.> MultiprocessObserver : eventPublisher() / \n eventObserver()
+BipolarStepperMotorDriver *-left-  "1" Navigation
+BipolarStepperMotorDriver *-up-  "1" AccelerationStrategy
+BipolarStepperMotorDriver *-down- " 1\n"  StepperMotor
 
-Navigation .right.> AccelerationStrategy
-AccelerationStrategy --> DelayPlanner
+Navigation::go .down.> AccelerationStrategy::computeSleepTimeUs : computeSleepTimeUs()
+Navigation .down.> BipolarStepperMotorDriver : pulseStart() \n pulseStop()
+Navigation <.down. BipolarStepperMotorDriver : go()
+
+AccelerationStrategy *-up- "1" DelayPlanner
 
 State ..> AccelerationStrategy : decreaseSleepTime()/\n increaseSleepTime()
 
 Benchmark ..> InteractiveAcceleration
 
-StaticControllerFactory .right.> StaticDelayPlanner
-StaticControllerFactory .right.> StaticNavigation
+StaticControllerFactory .down..> StaticDelayPlanner
+StaticControllerFactory .down.> StaticNavigation
 
-DynamicControllerFactory .right.> DynamicDelayPlanner
-DynamicControllerFactory .right.> DynamicNavigation
+DynamicControllerFactory .down...> DynamicDelayPlanner
+DynamicControllerFactory .down.> DynamicNavigation
+
+SynchronizedControllerFactory .down...> DynamicDelayPlanner
+SynchronizedControllerFactory *.down. "1"  BasicSynchronizedNavigation
+
+BipolarStepperMotorDriver .down.> EventDispatcher : publishMainLoop(\n"steppingComplete")
+
+ClientApp *.right.. "n < 14\n(26 GPIO pins in RPi)" BipolarStepperMotorDriver
+ClientApp .right.> BipolarStepperMotorDriver::signedSteps : signedSteps(-500, stepCallbackFn)
+ClientApp <.right. BipolarStepperMotorDriver::operateStepper : stepCallbackFn(currentPosition, \ntargetPosition, \nrealDirection, \nmultiprocessObserver)
+
 
 ''' Notes
 note as N1
@@ -143,5 +234,6 @@ N1 .. Benchmark
 N1 .. CustomAccelerationPerPps
 
 N2 .. DynamicControllerFactory
+
 @enduml
 

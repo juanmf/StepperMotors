@@ -450,7 +450,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         tprint(f"Setting Enabled pin {self.enableGpioPin} to {state}")
         GPIO.output(self.enableGpioPin, state)
 
-    @abstractmethod
     def pulseStart(self):
         """
         In most controllers this would mean set step pint to HIGH

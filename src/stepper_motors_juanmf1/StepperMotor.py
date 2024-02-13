@@ -131,13 +131,6 @@ class PG35S_D48_HHC2(StepperMotor):
 
 
 class GenericStepper(StepperMotor):
-    MIN_PPS = None
-    # Todo: remove this one
-
-    """
-    Steps per Revolution with 1.8 deg per step
-    """
-    SPR = 360 // 1.8
 
     def __init__(self, *, maxPps, minPps=150):
         super().__init__(maxPps, 1 / maxPps, minPps)
