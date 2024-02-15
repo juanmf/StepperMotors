@@ -40,6 +40,20 @@ A few distinct concepts have been implemented:
  `EventDispatcher` uses `MultiprocessObserver` to gain awareness of, and proxy events from, child dedicated process 
   running motor drivers, so in effect, driver events are (re)published in MainProcess where your app resides. 
 
+## Demo
+
+All motors driven by dedicated DRV8825.
+
+### Demo with 2 steppers at 400PPS (0.2 Deg/step)
+2 Steppers * 3 pins each (dir, step, sleep)
+[![2 steppers](https://img.youtube.com/vi/3OWGrZM90M8/0.jpg)](https://www.youtube.com/watch?v=3OWGrZM90M8)
+
+### Demo with 4 steppers at 400PPS 2 (0.2 Deg/step) + 4 Nema17 1.8 Deg/step
+2 Steppers * 3 GPIO pins (dir, step, sleep)
+2 Steppers * 2 GPIO pins (dir, step)
+[![4 steppers](https://img.youtube.com/vi/WprF3Dy7BbE/0.jpg)](https://www.youtube.com/watch?v=WprF3Dy7BbE)
+
+
 ![doc/collab.png](./doc/collab.png)
 
 ## Install
