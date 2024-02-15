@@ -32,7 +32,11 @@ class ControllerFactory:
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = AccelerationStrategy(stepperMotor, delayPlanner)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
+        return DRV8825MotorDriver(stepperMotor=stepperMotor,
+                                  accelerationStrategy=acceleration,
+                                  directionGpioPin=directionPin,
+                                  stepGpioPin=stepPin,
+                                  navigation=navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
                                   modeGpioPins=modeGpioPins,
@@ -45,7 +49,11 @@ class ControllerFactory:
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = LinearAcceleration(stepperMotor, delayPlanner)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
+        return DRV8825MotorDriver(stepperMotor=stepperMotor,
+                                  accelerationStrategy=acceleration,
+                                  directionGpioPin=directionPin,
+                                  stepGpioPin=stepPin,
+                                  navigation=navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
                                   modeGpioPins=modeGpioPins,
@@ -58,7 +66,11 @@ class ControllerFactory:
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
+        return DRV8825MotorDriver(stepperMotor=stepperMotor,
+                                  accelerationStrategy=acceleration,
+                                  directionGpioPin=directionPin,
+                                  stepGpioPin=stepPin,
+                                  navigation=navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
                                   modeGpioPins=modeGpioPins,
@@ -72,7 +84,11 @@ class ControllerFactory:
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = CustomAccelerationPerPps(stepperMotor, delayPlanner, transformations=transformations)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
+        return DRV8825MotorDriver(stepperMotor=stepperMotor,
+                                  accelerationStrategy=acceleration,
+                                  directionGpioPin=directionPin,
+                                  stepGpioPin=stepPin,
+                                  navigation=navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
                                   modeGpioPins=modeGpioPins,
@@ -85,7 +101,11 @@ class ControllerFactory:
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = InteractiveAcceleration(stepperMotor, delayPlanner, minSpeedDelta, minPps)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
+        return DRV8825MotorDriver(stepperMotor=stepperMotor,
+                                  accelerationStrategy=acceleration,
+                                  directionGpioPin=directionPin,
+                                  stepGpioPin=stepPin,
+                                  navigation=navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
                                   modeGpioPins=modeGpioPins,
@@ -192,7 +212,11 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         navigation = self.getNavigation()
         acceleration = CustomAccelerationPerPps(stepperMotor, delayPlanner, transformations=transformations)
 
-        driver = DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
+        driver = DRV8825MotorDriver(stepperMotor=stepperMotor,
+                                    accelerationStrategy=acceleration,
+                                    directionGpioPin=directionPin,
+                                    stepGpioPin=stepPin,
+                                    navigation=navigation,
                                     sleepGpioPin=sleepGpioPin,
                                     stepsMode=stepsMode,
                                     modeGpioPins=modeGpioPins,
@@ -214,7 +238,11 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = LinearAcceleration(stepperMotor, delayPlanner)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
+        return DRV8825MotorDriver(stepperMotor=stepperMotor,
+                                  accelerationStrategy=acceleration,
+                                  directionGpioPin=directionPin,
+                                  stepGpioPin=stepPin,
+                                  navigation=navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
                                   modeGpioPins=modeGpioPins,
@@ -233,7 +261,11 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
-        return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation,
+        return DRV8825MotorDriver(stepperMotor=stepperMotor,
+                                  accelerationStrategy=acceleration,
+                                  directionGpioPin=directionPin,
+                                  stepGpioPin=stepPin,
+                                  navigation=navigation,
                                   sleepGpioPin=sleepGpioPin,
                                   stepsMode=stepsMode,
                                   modeGpioPins=modeGpioPins,

@@ -28,12 +28,12 @@ class MotorDriver(BlockingQueueWorker):
     INSTANCES_COUNT = 0
     PULSE_TIME_MICROS = None
 
-    def __init__(self, *,workerName, jobQueueMaxSize=2, jobQueue=None, sharedMemory=None, isProxy=False):
+    def __init__(self, *, accelerationStrategy, workerName, jobQueueMaxSize=2, jobQueue=None, sharedMemory=None, isProxy=False):
         workerName = f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_" \
                      if workerName is None else workerName
         super().__init__(self._operateStepper, jobQueueMaxSize=jobQueueMaxSize, workerName=workerName,
                          jobQueue=jobQueue, isProxy=isProxy)
-
+        self.accelerationStrategy = accelerationStrategy
         if sharedMemory is not None:
             self.sharedLock = sharedMemory[0]
             self.sharedPosition = sharedMemory[1]
@@ -47,6 +47,10 @@ class MotorDriver(BlockingQueueWorker):
 
     @abstractmethod
     def getCurrentPosition(self):
+        pass
+
+    @abstractmethod
+    def setCurrentPosition(self, position):
         pass
 
     @abstractmethod
@@ -147,12 +151,12 @@ class BipolarStepperMotorDriver(MotorDriver):
     Please take a look at PyCNC. Otherwise, you are only limited by the number of available GPIO pins.
     """
 
-    def __init__(self,
+    def __init__(self, *,
                  stepperMotor: StepperMotor,
                  accelerationStrategy: AccelerationStrategy,
                  directionGpioPin,
                  stepGpioPin,
-                 navigation, *,
+                 navigation,
                  sleepGpioPin=None,
                  stepsMode="Full",
                  modeGpioPins=None,
@@ -190,14 +194,13 @@ class BipolarStepperMotorDriver(MotorDriver):
         [GPIO_26]   37 * * 38 [GPIO_20]
         [GND]       39 * * 40 [GPIO_21]
         """
-        super().__init__(jobQueueMaxSize=2,
+        super().__init__(accelerationStrategy=accelerationStrategy, jobQueueMaxSize=2,
                          workerName=f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_"
                          if workerName is None else workerName, jobQueue=jobQueue, sharedMemory=sharedMemory,
                          isProxy=isProxy)
         self._steppingCompleteEventName = steppingCompleteEventName
         MotorDriver.INSTANCES_COUNT += 1
         self.stepperMotor = stepperMotor
-        self.accelerationStrategy = accelerationStrategy
         self.enableGpioPin = enableGpioPin
         self.modeGpioPins = modeGpioPins  # Microstep Resolution GPIO Pins
         self.stepsMode = stepsMode
@@ -370,12 +373,12 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
     # DRV8825 Uses HIGH pulse on LOW background for STEP signal.
     PULSE_STATE = GPIO.HIGH
 
-    def __init__(self,
+    def __init__(self, *,
                  stepperMotor: StepperMotor,
                  accelerationStrategy: AccelerationStrategy,
                  directionGpioPin,
                  stepGpioPin,
-                 navigation, *,
+                 navigation,
                  # LOW = sleep mode; HIGH = chip active
                  sleepGpioPin=None,
                  stepsMode="Full",
@@ -408,7 +411,8 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         @param modeGpioPins: [MODE_0..2]
         @param enableGpioPin: [EN] LOW = enabled; HIGH chip disabled
         """
-        super().__init__(stepperMotor, accelerationStrategy, directionGpioPin, stepGpioPin, navigation,
+        super().__init__(stepperMotor=stepperMotor, accelerationStrategy=accelerationStrategy, 
+                         directionGpioPin=directionGpioPin, stepGpioPin=stepGpioPin, navigation=navigation,
                          sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
                          enableGpioPin=enableGpioPin, jobQueue=jobQueue, sharedMemory=sharedMemory, isProxy=isProxy,
                          steppingCompleteEventName=steppingCompleteEventName)

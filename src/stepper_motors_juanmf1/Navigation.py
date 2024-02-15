@@ -1,21 +1,17 @@
 # Static or responsive/dynamic navigation implementations.
-import asyncio
 import threading
 import time
 import traceback
-from collections import OrderedDict
 from concurrent.futures import Future
 
 from RPi import GPIO
-from stepper_motors_juanmf1.myMath import cmp
-from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
+from stepper_motors_juanmf1.myMath import cmp
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
-from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver, MotorDriver
-from stepper_motors_juanmf1.StepperMotor import StepperMotor
-
+from stepper_motors_juanmf1.Controller import MotorDriver
 from stepper_motors_juanmf1.EventDispatcher import EventDispatcher
-from stepper_motors_juanmf1.myMath import cmp
+from stepper_motors_juanmf1.SortedDict import SortedDict
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 
 class Navigation:
@@ -145,7 +141,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         BlockingQueueWorker.__init__(self, self.__doGo, jobQueueMaxSize=4, workerName="SynchronizedNavigation")
         Navigation.__init__(self)
         # {startTimNs: [(controller, sleepTime), ...]}.
-        self.pulsingControllers = OrderedDict()
+        self.pulsingControllers = SortedDict()
         self.high = high
         self.low = low
         self.lock = threading.Lock()
@@ -165,6 +161,8 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
 
     def __doGo(self, pulsingController):
         self.putPulsingController(time.monotonic_ns(), pulsingController)
+        duePulses = []
+        dueControllers = []
         try:
             while self.pulsingControllers:
                 if self.hasQueuedJobs():
@@ -173,8 +171,6 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                     # Can't be, a running Driver because it's blocked, removed from pulsingControllers to check
                     # interrupted, then let go to pick up it's next job.
                     return
-                duePulses = []
-                dueControllers = []
                 now = time.monotonic_ns()
                 while self.pulsingControllers:
                     pulseTime, pulsingController = self.pulsingControllers.popitem()
@@ -197,6 +193,8 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                     # Finish with remaining controllers after sending LOW
                     if dueControllers:
                         self.updateSleepTimes(dueControllers, pulseTime)
+                dueControllers.clear()
+                duePulses.clear()
 
         except Exception as e:
             print(f"SOMETHING WRONG {e}")
