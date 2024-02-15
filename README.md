@@ -287,7 +287,7 @@ $ python3 Benchmark.py 23 24
 #  is listening, in my case on `tcp6       0      0 :::8888` 
 ```
 Annotated (`# <== `) output:
-# Todo: update benchmark putput
+#### Todo: update benchmark 0utput
 
 
 Using `Benchmark` from outside the module
