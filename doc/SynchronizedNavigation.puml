@@ -1,0 +1,35 @@
+@startuml
+class BlockingQueueWorker {
+// Waits for jobs, dedicated Thread
+}
+class Navigation {
+go()
+}
+class MotorDriver{
+_operateStepper()
+}
+class MotorDriver1 <<instance>>
+class MotorDriver2 <<instance>>
+class MotorDriver3 <<instance>>
+class MotorDriver4 <<instance>>
+class StaticNavigation {
+}
+class StaticNavigation1 <<Instance>>
+class StaticNavigation2 <<Instance>>
+
+class BasicSynchronizedNavigation <<Singleton>> {
+// Centralized stepping pulses
+}
+
+StaticNavigation -up-|> Navigation
+DinamycNavigation -right|> Navigation
+BasicSynchronizedNavigation -up-|> DinamycNavigation
+
+MotorDriver -up-|> BlockingQueueWorker
+BasicSynchronizedNavigation -left-|> BlockingQueueWorker
+
+MotorDriver1 .up.> BasicSynchronizedNavigation : go()
+MotorDriver2 .up.> BasicSynchronizedNavigation : go()
+MotorDriver3 .up.> StaticNavigation1 : go()
+MotorDriver4 .up.> StaticNavigation2 : go()
+@enduml

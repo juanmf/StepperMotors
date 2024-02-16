@@ -214,6 +214,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
 
 
     class Chain(Job):
+        # Todo: Driver Chained jobs might benefit from avoiding ramp-down.
         def __init__(self, worker: 'BlockingQueueWorker', *, paramsList: list = None,
                      prev: 'BlockingQueueWorker.Chain' = None):
             super().__init__(paramsList=[] if paramsList is None else paramsList)
