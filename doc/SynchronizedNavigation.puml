@@ -1,6 +1,7 @@
 @startuml
 class BlockingQueueWorker {
 // Waits for jobs, dedicated Thread
+work()
 }
 class Navigation {
 go()
@@ -19,6 +20,7 @@ class StaticNavigation2 <<Instance>>
 
 class BasicSynchronizedNavigation <<Singleton>> {
 // Centralized stepping pulses
+go()
 }
 
 StaticNavigation -up-|> Navigation
@@ -32,4 +34,6 @@ MotorDriver1 .up.> BasicSynchronizedNavigation : go()
 MotorDriver2 .up.> BasicSynchronizedNavigation : go()
 MotorDriver3 .up.> StaticNavigation1 : go()
 MotorDriver4 .up.> StaticNavigation2 : go()
+
+BasicSynchronizedNavigation::go  ..> BlockingQueueWorker::work  : work(PulsingController(MotorDriver))
 @enduml

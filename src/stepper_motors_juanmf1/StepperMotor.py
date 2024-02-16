@@ -31,7 +31,7 @@ class StepperMotor:
     TORQUE_UNIT = None
     SPR = None
 
-    def __init__(self, pps, sleepTime, minPps):
+    def __init__(self, pps, sleepTime, minPps, spr):
         super().__init__()
         # Sets GPIO pins
         # Todo: assess removal.
@@ -43,6 +43,7 @@ class StepperMotor:
         if self.MIN_PPS is None:
             self.MIN_PPS = minPps
         self.minSleepTime = 1 / self.MIN_PPS
+        self.spr = spr
 
     def readSettings(self):
         with self.settingsLock:
@@ -127,10 +128,10 @@ class PG35S_D48_HHC2(StepperMotor):
     SLEEP_TIME_MAP = {True: LOADED_SLEEP, False: NOLOAD_SLEEP}
 
     def __init__(self, loaded: bool = True, minPps=210):
-        super().__init__(self.PPS_MAP[loaded], self.SLEEP_TIME_MAP[loaded], minPps)
+        super().__init__(self.PPS_MAP[loaded], self.SLEEP_TIME_MAP[loaded], minPps, spr=self.SPR)
 
 
 class GenericStepper(StepperMotor):
 
-    def __init__(self, *, maxPps, minPps=150):
-        super().__init__(maxPps, 1 / maxPps, minPps)
+    def __init__(self, *, maxPps, minPps=150, spr=200):
+        super().__init__(maxPps, 1 / maxPps, minPps, spr)
