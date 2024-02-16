@@ -298,7 +298,9 @@ class BipolarStepperMotorDriver(MotorDriver):
         self.isRunning = False
 
     def setCurrentPosition(self, position):
-        assert not self.isProxy
+        if self.isProxy:
+            # Enable proxy (MainProcess counterpart of childProcess driver) to reset position only when not running.
+            assert not self.isRunning, "Proxy Can't change position when stepper is running."
         self.currentPosition = position
         if self.sharedPosition is not None:
             with self.sharedLock:
@@ -307,7 +309,12 @@ class BipolarStepperMotorDriver(MotorDriver):
 
     def getCurrentPosition(self):
         if self.isProxy:
-
+            with self.sharedLock:
+                self.currentPosition = self.sharedPosition.position
+                self.currentDirection = self.sharedPosition.direction
+        elif self.sharedPosition is not None and self.currentPosition != self.sharedPosition.position:
+            # Most likely proxyDriver in MainProcess changed position, potential usecase setting to 0 (Homing).
+            assert not self.isRunning, "Illegal state: Position externally modified while running."
             with self.sharedLock:
                 self.currentPosition = self.sharedPosition.position
                 self.currentDirection = self.sharedPosition.direction
