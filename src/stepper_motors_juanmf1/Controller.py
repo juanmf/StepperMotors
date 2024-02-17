@@ -476,4 +476,5 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         """
         GPIO.output(self.stepGpioPin, GPIO.LOW)
 
-class TB6560(BipolarStepperMotorDriver):
+# class TB6560(BipolarStepperMotorDriver):
+#     pass

@@ -4,10 +4,12 @@ import threading
 
 class StepperMotor:
     """
+
     Abstract class for Stepper motor, a StepperMotor implementations are placeholder for motor specifics
     Actual behavior is implemented elsewhere (see Controller and AccelerationStrategy).
 
     Interesting reads
+      https://www.orientalmotor.com/stepper-motors/technology/speed-torque-curves-for-stepper-motors.html
       https://us.metoree.com/categories/stepping-motor/
       https://forum.arduino.cc/t/stepper-motor-basics/275223
     """
@@ -74,8 +76,7 @@ class PG35S_D48_HHC2(StepperMotor):
     Life 3000h
     """
 
-    MIN_PPS = None
-    MAX_TORQUE_PPS = None
+    MIN_PPS = 210
     # pps -> N-m x 10^-4
     TORQUE_UNIT = StepperMotor.TORQUE_UNIT_CN_CM
 
@@ -127,9 +128,155 @@ class PG35S_D48_HHC2(StepperMotor):
     PPS_MAP = {True: LOADED_MAX_PPS, False: NOLOAD_MAX_PPS}
     SLEEP_TIME_MAP = {True: LOADED_SLEEP, False: NOLOAD_SLEEP}
 
-    def __init__(self, loaded: bool = True, minPps=210):
+    def __init__(self, loaded: bool = True, minPps=None):
+        minPps = minPps if minPps else self.MIN_PPS
         super().__init__(self.PPS_MAP[loaded], self.SLEEP_TIME_MAP[loaded], minPps, spr=self.SPR)
 
+#  Soon:
+# STEPPERONLINE 0.9deg Nema 17 Stepper Motor Bipolar 1.5A 30Ncm
+# Nema 17 Motor 42BYGH 1.8 Degree Body 38MM 4-Lead Wire 1.5A 42N.cm (60oz.in)
+# STEPPERONLINE Nema 17 Stepper Motor Bipolar 2A 59Ncm(84oz.in) 48mm Body 4-Lead W
+
+class Nema23_3Nm_23HS45_4204S(StepperMotor):
+    """
+    STEPPERONLINE High Torque Nema 23 CNC Stepper Motor 114mm 425oz.in/3Nm CNC Mill Lathe Router
+    https://m.media-amazon.com/images/I/71D9bTPATQL.pdf
+    https://m.media-amazon.com/images/I/A1DqXXSNDVL.pdf
+    """
+    # 30RPM * 200 / 60 Min speed in 71D9bTPATQL.pdf
+    MIN_PPS = 100
+
+    # pps -> N-m x 10^-4
+    TORQUE_UNIT = StepperMotor.TORQUE_UNIT_N_M
+    TORQUE = 3
+
+    """
+    Gathered with module Benchmark
+    format: (PPS, increment) Speeds up the fastest from 200 to 1044 PPS.
+    """
+    TORQUE_CHARACTERISTICS = [(100, 150), (250, 0)]
+
+    """
+    Steps per Revolution with 1.8 deg per step
+    """
+    SPR = 360 // 1.8  # Steps per Revolution, 0.212 is angle per step in deg
+
+    # Max tested functional speed was 1067
+    LOADED_MAX_PPS = 4000  # DatasheetMax is 1500
+    LOADED_SLEEP = 1 / 4000
+
+    NOLOAD_MAX_PPS = 2000  # 850
+    NOLOAD_SLEEP = 1 / 2000  # 0.000496
+
+    PPS_MAP = {True: LOADED_MAX_PPS, False: NOLOAD_MAX_PPS}
+    SLEEP_TIME_MAP = {True: LOADED_SLEEP, False: NOLOAD_SLEEP}
+
+    def __init__(self, loaded: bool = True, minPps=None):
+        minPps = minPps if minPps else self.MIN_PPS
+        super().__init__(self.PPS_MAP[loaded], self.SLEEP_TIME_MAP[loaded], minPps, spr=self.SPR)
+
+class Nema17_59Ncm_17HS19_2004S1(StepperMotor):
+    """
+    Nema 17 Stepper Motor Bipolar 2A 59Ncm(84oz.in) 48mm Body 4-Lead W/ 1m Cable and Connector
+    https://m.media-amazon.com/images/I/91zyUMD1hWL.pdf
+    https://www.omc-stepperonline.com/download/17HS19-2004S1_Torque_Curve.pdf
+    Brand	STEPPERONLINE
+    Voltage	12 Volts
+    Horsepower	1.4 hp
+    Product Dimensions	1.65"W x 1.65"H
+    Material	lead
+    Item Weight	0.88 Pounds
+    Manufacturer	OSM Technology Co.,Ltd.
+    Part Number	17HS19-2004S1
+    Item Weight	14.1 ounces
+    Country of Origin	China
+    Item model number	17HS19-2004S
+    Size	1.65"x1.65"
+    """
+    # Based on torque curve, 400 PPS in half step => 200PPS on Full step.
+    MIN_PPS = 200
+
+    # Ncm = cNM
+    TORQUE_UNIT = StepperMotor.TORQUE_UNIT_CN_M
+    TORQUE = 59
+
+    """
+    Gathered with module Benchmark
+    format: (PPS, increment) Speeds up the fastest from 200 to 1044 PPS.
+    """
+    TORQUE_CHARACTERISTICS = [(200, 150), (350, 0)]
+
+    """
+    Steps per Revolution with 1.8 deg per step
+    """
+    SPR = 360 // 1.8  # Steps per Revolution, 0.212 is angle per step in deg
+
+    # Max tested functional speed was 1067
+    LOADED_MAX_PPS = 2500  # DatasheetMax is 1500
+    LOADED_SLEEP = 1 / 2500
+
+    NOLOAD_MAX_PPS = 1000  # 850
+    NOLOAD_SLEEP = 1 / 1000  # 0.000496
+
+    PPS_MAP = {True: LOADED_MAX_PPS, False: NOLOAD_MAX_PPS}
+    SLEEP_TIME_MAP = {True: LOADED_SLEEP, False: NOLOAD_SLEEP}
+
+    def __init__(self, loaded: bool = True, minPps=None):
+        minPps = minPps if minPps else self.MIN_PPS
+        super().__init__(self.PPS_MAP[loaded], self.SLEEP_TIME_MAP[loaded], minPps, spr=self.SPR)
+
+
+class Nema17_42Ncm_17HS4401(StepperMotor):
+    """
+    Nema 17 Motor 42BYGH 1.8 Degree Body 38MM 4-Lead Wire1.5A 42N.cm (60oz.in)
+    https://roboticx.ps/wp-content/uploads/2016/12/HB_Stepper_Motor_E.pdf
+
+    Electrical Specification:
+    Product type:Bipolar 42 Stepper Motor
+    Step Angle: 1.8 deg.
+    Rated Current/phase: 1.5A
+    Holding Torque:42N.cm (60oz.in)
+
+    General Specification:
+    Step angle accuracy: + - 5%(full step,not load)
+    Resistance accuracy: + - 10%
+    Inductance accuracy: + - 20%
+    Temperature rise: 80deg Max(rated current,2 phase on)
+    Ambient temperature ----------20deg ~+50deg
+    Insulation resistance:100M Min,500VDC
+    Insultion Strength--------500VAC for one minute.
+    """
+
+    MIN_PPS = 200
+
+    # Ncm = cNM
+    TORQUE_UNIT = StepperMotor.TORQUE_UNIT_CN_M
+    TORQUE = 59
+
+    """
+    Gathered with module Benchmark
+    format: (PPS, increment) Speeds up the fastest from 200 to 1044 PPS.
+    """
+    TORQUE_CHARACTERISTICS = [(200, 150), (350, 0)]
+
+    """
+    Steps per Revolution with 1.8 deg per step
+    """
+    SPR = 360 // 1.8  # Steps per Revolution, 0.212 is angle per step in deg
+
+    # Max tested functional speed was 1067
+    LOADED_MAX_PPS = 2500  # DatasheetMax is 1500
+    LOADED_SLEEP = 1 / 2500
+
+    NOLOAD_MAX_PPS = 1000  # 850
+    NOLOAD_SLEEP = 1 / 1000  # 0.000496
+
+    PPS_MAP = {True: LOADED_MAX_PPS, False: NOLOAD_MAX_PPS}
+    SLEEP_TIME_MAP = {True: LOADED_SLEEP, False: NOLOAD_SLEEP}
+
+    def __init__(self, loaded: bool = True, minPps=None):
+        minPps = minPps if minPps else self.MIN_PPS
+        super().__init__(self.PPS_MAP[loaded], self.SLEEP_TIME_MAP[loaded], minPps, spr=self.SPR)
 
 class GenericStepper(StepperMotor):
 
