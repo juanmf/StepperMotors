@@ -49,7 +49,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
         self.workerFuture = self.startWorker(jobConsumer)
         with _WORKERS_LOCK:
             _WORKERS.append(self)
-        self.currentJob = None
+        self.currentJob: BlockingQueueWorker.Job = None
 
     def hasQueuedJobs(self):
         return self.__jobQueue.qsize() > 0

@@ -289,13 +289,18 @@ class BipolarStepperMotorDriver(MotorDriver):
         block.result()
         if self.navigation.isInterruptible() and self.isInterrupted():
             return
-        EventDispatcher.instance().publishMainLoop(eventName + "FinalStep", {'position': self.currentPosition})
 
         if not self.useHoldingTorque:
             self.setSleepMode(sleepOn=True)
             self.setEnableMode(enableOn=False)
 
         self.isRunning = False
+        startTime = self.currentJob.startTime.result()
+        EventDispatcher.instance().publishMainLoop(eventName + "FinalStep",
+                                                   {'position': self.currentPosition,
+                                                    'startTime': startTime,
+                                                    'endTime': time.monotonic_ns()
+                                                    })
 
     def setCurrentPosition(self, position):
         if self.isProxy:
