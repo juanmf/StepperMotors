@@ -1,11 +1,8 @@
-import ctypes
 import uuid
-from abc import abstractmethod
-from functools import partial
 
-from multiprocess import Manager, Lock, Event
+from multiprocess import Manager
 
-from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
+from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker, MultiprocessObserver
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 
@@ -104,40 +101,3 @@ class EventDispatcher(BlockingQueueWorker):
     def multiProcessPublish(sharedMemory, eventName, eventInfo):
         sharedMemory["eventName"] = eventName
         sharedMemory["eventInfo"] = eventInfo
-
-
-class MultiprocessObserver(BlockingQueueWorker):
-    instanceCountLock = Lock()
-    count = 0
-
-    def __init__(self, *, eventObserver, eventPublisher, sharedMemory):
-        with MultiprocessObserver.instanceCountLock:
-            super().__init__(partial(self.eventObserver, self),
-                             jobQueueMaxSize=1, workerName=f"MultiprocessObserver_{self.count}")
-            MultiprocessObserver.count += 1
-
-        self._eventObserver = eventObserver
-        self._eventPublisher = eventPublisher
-        self._sharedMemory = sharedMemory
-
-        self.observedEvent = Event()
-        self.observerLock = Lock()
-        # start observing
-        self.work([])
-
-    @staticmethod
-    @abstractmethod
-    def eventObserver(instance: 'MultiprocessObserver'):
-        while True:
-            instance.observedEvent.wait()
-            with instance.observerLock:
-                instance._eventObserver(instance._sharedMemory)
-            instance.observedEvent.clear()
-
-    @staticmethod
-    @abstractmethod
-    def eventPublisher(instance: 'MultiprocessObserver', *args, **kwargs):
-        with instance.observerLock:
-            instance._eventPublisher(instance._sharedMemory, *args, **kwargs)
-
-        instance.observedEvent.set()

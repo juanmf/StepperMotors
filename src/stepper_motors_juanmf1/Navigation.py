@@ -68,7 +68,7 @@ class StaticNavigation(Navigation):
                    controller.multiprocessObserver)
 
             if abs(steps - i) == eventInAdvanceSteps:
-                EventDiapatcher._instance().publishMainLoop(eventName + "Advance", {'position': i})
+                EventDiapatcher.instance().publishMainLoop(eventName + "Advance", {'position': i})
 
         accelerationStrategy.done()
         controller.setDirection(GPIO.LOW)
@@ -106,7 +106,7 @@ class DynamicNavigation(Navigation):
 
             if (abs(targetPosition - position) == eventInAdvanceSteps
                 and cmp(targetPosition, position) == controller.accelerationStrategy.realDirection):
-                EventDiapatcher._instance().publishMainLoop(eventName + "Advance", {'position': position})
+                EventDiapatcher.instance().publishMainLoop(eventName + "Advance", {'position': position})
 
 
         # todo: check if still needed.

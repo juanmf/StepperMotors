@@ -28,11 +28,12 @@ class MotorDriver(BlockingQueueWorker):
     INSTANCES_COUNT = 0
     PULSE_TIME_MICROS = None
 
-    def __init__(self, *, accelerationStrategy, workerName, jobQueueMaxSize=2, jobQueue=None, sharedMemory=None, isProxy=False):
+    def __init__(self, *, accelerationStrategy, workerName, jobQueueMaxSize=2, jobQueue=None, sharedMemory=None, 
+                 isProxy=False, jobCompletionObserver=None):
         workerName = f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_" \
                      if workerName is None else workerName
         super().__init__(self._operateStepper, jobQueueMaxSize=jobQueueMaxSize, workerName=workerName,
-                         jobQueue=jobQueue, isProxy=isProxy)
+                         jobQueue=jobQueue, isProxy=isProxy, jobCompletionObserver=jobCompletionObserver)
         self.accelerationStrategy = accelerationStrategy
         if sharedMemory is not None:
             self.sharedLock = sharedMemory[0]
@@ -166,7 +167,8 @@ class BipolarStepperMotorDriver(MotorDriver):
                  jobQueue=None,
                  sharedMemory=None,
                  isProxy=False,
-                 steppingCompleteEventName="steppingComplete"):
+                 steppingCompleteEventName="steppingComplete",
+                 jobCompletionObserver=None):
         """
         Multiple drivers could share the same mode pins (assuming current supply from pin is enough,
         and the drivers' mode pins are bridged same to same)
@@ -197,7 +199,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         super().__init__(accelerationStrategy=accelerationStrategy, jobQueueMaxSize=2,
                          workerName=f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_"
                          if workerName is None else workerName, jobQueue=jobQueue, sharedMemory=sharedMemory,
-                         isProxy=isProxy)
+                         isProxy=isProxy, jobCompletionObserver=jobCompletionObserver)
         self._steppingCompleteEventName = steppingCompleteEventName
         MotorDriver.INSTANCES_COUNT += 1
         self.stepperMotor = stepperMotor
@@ -400,7 +402,8 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                  jobQueue=None,
                  sharedMemory=None,
                  isProxy=False,
-                 steppingCompleteEventName="steppingComplete"):
+                 steppingCompleteEventName="steppingComplete",
+                 jobCompletionObserver=None):
         """
         DRIVER PINOUT: [EN??] & [FLT] unused
 
@@ -427,7 +430,8 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                          directionGpioPin=directionGpioPin, stepGpioPin=stepGpioPin, navigation=navigation,
                          sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
                          enableGpioPin=enableGpioPin, jobQueue=jobQueue, sharedMemory=sharedMemory, isProxy=isProxy,
-                         steppingCompleteEventName=steppingCompleteEventName)
+                         steppingCompleteEventName=steppingCompleteEventName,
+                         jobCompletionObserver=jobCompletionObserver)
         self.SIGNED_STEPS_CALLABLES = {-1: lambda steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps:
                                            self.stepCounterClockWise(steps,
                                                                      fn,

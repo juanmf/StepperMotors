@@ -30,9 +30,8 @@ def tprint(*args, sep=' ', end='\n'):
 def flush_current_thread_only():
     global _printStreams
     thread_name, thread_id = get_current_thread_info()
-    with _globalPrintLock:
-        if thread_name in _printStreams:
-            flush_streams({thread_name: _printStreams.pop(thread_name)})
+    if thread_name in _printStreams:
+        flush_streams({thread_name: _printStreams.pop(thread_name)})
 
 
 def flush_streams_if_not_empty():
@@ -46,7 +45,6 @@ def flush_streams(toPrint=None):
     localPrintItems = _printStreams if toPrint is None else toPrint
 
     out = ""
-
     with _globalPrintLock:
         for thread_name, messages in localPrintItems.items():
             # Print the contents to stdout

@@ -8,7 +8,7 @@ from stepper_motors_juanmf1.AccelerationStrategy import (LinearAcceleration, Acc
                                                          CustomAccelerationPerPps, DynamicDelayPlanner,
                                                          StaticDelayPlanner,
                                                          InteractiveAcceleration, DelayPlanner)
-from stepper_motors_juanmf1.Controller import DRV8825MotorDriver, DriverSharedPositionStruct
+from stepper_motors_juanmf1.Controller import DRV8825MotorDriver, DriverSharedPositionStruct, MotorDriver
 from stepper_motors_juanmf1.Navigation import (DynamicNavigation, StaticNavigation, Navigation,
                                                BasicSynchronizedNavigation)
 
@@ -189,18 +189,22 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
 
         eventsMultiprocessObserver = self.eventDispatcher.getMultiprocessObserver()
 
+        proxies = self.Unpacker.doUnpack(self._factoryOrders, queues, sharedMemories, isProxy=True)
+        jobCompletionObservers = [driver.jobCompletionObserver for driver in proxies]
         unpacker = self.Unpacker(self._factoryOrders, queues, sharedMemories, eventsMultiprocessObserver)
-        childProcess = Process(target=unpacker.unpack)
+        childProcess = Process(target=unpacker.unpack, args=(jobCompletionObservers,))
         childProcess.daemon = True
         flush_streams_if_not_empty()
         childProcess.start()
-        proxies = self.Unpacker.doUnpack(self._factoryOrders, queues, sharedMemories, isProxy=True)
         self.runningProcesses.append((childProcess, proxies))
         self._factoryOrders = []
         self._clientMultiprocessObservers = []
         return proxies
 
-    def getMpCustomTorqueCharacteristicsDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionPin, stepPin,
+    def getMpCustomTorqueCharacteristicsDRV8825With(self, queue, sharedMemory, isProxy, jobCompletionObserver,
+                                                    stepperMotor,
+                                                    directionPin,
+                                                    stepPin,
                                                     transformations=None,
                                                     sleepGpioPin=None,
                                                     stepsMode="Full",
@@ -224,12 +228,16 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                     jobQueue=queue,
                                     sharedMemory=sharedMemory,
                                     isProxy=isProxy,
-                                    steppingCompleteEventName=steppingCompleteEventName)
+                                    steppingCompleteEventName=steppingCompleteEventName,
+                                    jobCompletionObserver=jobCompletionObserver)
 
         print(f"driver is proxy? {isProxy} {driver} {driver.getJobQueue()}")
         return driver
 
-    def getMpLinearDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionPin, stepPin,
+    def getMpLinearDRV8825With(self, queue, sharedMemory, isProxy, jobCompletionObserver,
+                               stepperMotor,
+                               directionPin,
+                               stepPin,
                                sleepGpioPin=None,
                                stepsMode="Full",
                                modeGpioPins=None,
@@ -250,9 +258,13 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                   jobQueue=queue,
                                   sharedMemory=sharedMemory,
                                   isProxy=isProxy,
-                                  steppingCompleteEventName=steppingCompleteEventName)
+                                  steppingCompleteEventName=steppingCompleteEventName,
+                                  jobCompletionObserver=jobCompletionObserver)
 
-    def getMpExponentialDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionPin, stepPin,
+    def getMpExponentialDRV8825With(self, queue, sharedMemory, isProxy, jobCompletionObserver,
+                                    stepperMotor,
+                                    directionPin,
+                                    stepPin,
                                     sleepGpioPin=None,
                                     stepsMode="Full",
                                     modeGpioPins=None,
@@ -273,7 +285,8 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                   jobQueue=queue,
                                   sharedMemory=sharedMemory,
                                   isProxy=isProxy,
-                                  steppingCompleteEventName=steppingCompleteEventName)
+                                  steppingCompleteEventName=steppingCompleteEventName,
+                                  jobCompletionObserver=jobCompletionObserver)
 
     class Unpacker:
         def __init__(self, factoryOrders, queues: list, sharedMemories: list, eventMultiprocessObserver):
@@ -283,7 +296,7 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
             self.multiprocessObserver = eventMultiprocessObserver
             self.eventDispatcher = None
 
-        def unpack(self):
+        def unpack(self, jobCompletionObservers):
             """
             In new process, build Drivers
             @param factoryOrders:
@@ -303,16 +316,22 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
             self.eventDispatcher = EventDispatcher.instance(self.multiprocessObserver)
             tprint("Unpacker: Instantiating EventDispatcher with shared memory", self.multiprocessObserver,
                    self.eventDispatcher, self.eventDispatcher._multiprocessObserver,
-                   self.eventDispatcher._shouldDispatchToParentProcess)
-            drivers = self.doUnpack(self.factoryOrders, self.queues, self.sharedMemories, isProxy=False)
+                   self.eventDispatcher._shouldDispatchToParentProcess, jobCompletionObservers)
+            drivers = self.doUnpack(self.factoryOrders, self.queues, self.sharedMemories, isProxy=False,
+                                    jobCompletionObservers=jobCompletionObservers)
             # block main forever.
             drivers.pop().workerFuture.result()
 
         @staticmethod
-        def doUnpack(factoryOrders, queues, sharedMemories, isProxy):
+        def doUnpack(factoryOrders, queues, sharedMemories, isProxy, jobCompletionObservers=None) -> list[MotorDriver]:
             drivers = []
             for index, order in enumerate(factoryOrders):
-                drivers.append(
-                    order[0](queues[index], sharedMemories[index], isProxy,
-                             *order[1][0], **order[1][1]))
+                if jobCompletionObservers:
+                    drivers.append(
+                        order[0](queues[index], sharedMemories[index], isProxy, jobCompletionObservers[index],
+                                 *order[1][0], **order[1][1]))
+                else:
+                    drivers.append(
+                        order[0](queues[index], sharedMemories[index], isProxy, None,
+                                 *order[1][0], **order[1][1]))
             return drivers
