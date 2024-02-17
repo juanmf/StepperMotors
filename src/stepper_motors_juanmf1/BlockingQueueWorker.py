@@ -81,7 +81,9 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
             # Parent process/client side
             tprint(f"Queueing plain paramList as Proxied: {paramsList} at {time.monotonic_ns()}")
 
-            self.__jobQueue.put(BlockingQueueWorker.Proxied(paramsList))
+            self.__jobQueue.put(BlockingQueueWorker.ProxiedChain(paramsList)
+                                if isinstance(paramsList, BlockingQueueWorker.Chain)
+                                else BlockingQueueWorker.Proxied(paramsList))
             # Todo sync completion
             return job
 
@@ -121,7 +123,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                     flush_streams_if_not_empty()
                 # Block until movement job is sent our way.
                 job = self.__jobQueue.get(block=True)
-                if isinstance(job, BlockingQueueWorker.Proxied):
+                if isinstance(job, BlockingQueueWorker.Proxied) or isinstance(job, BlockingQueueWorker.ProxiedChain):
                     job = self.jobbify(job)
 
                 self.currentJob = job
@@ -170,10 +172,17 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                 f"jobList max len {self.__jobQueue.maxsize}\n"
                 f"worker thread ({self.workerThread})")
 
-    @staticmethod
-    def jobbify(paramsList: list, startTime: Future = None):
-        job = paramsList if isinstance(paramsList, BlockingQueueWorker.Job) \
-            else BlockingQueueWorker.Job(paramsList=paramsList)
+    def jobbify(self, paramsList: list, startTime: Future = None):
+        job = None
+        if isinstance(paramsList, BlockingQueueWorker.Job):
+            job = paramsList
+        elif isinstance(paramsList, BlockingQueueWorker.ProxiedChain):
+            root = self.workChain(paramsList.pop(0))
+            for chainLink in paramsList:
+                root.then(chainLink)
+            job = root
+        else:
+            job = BlockingQueueWorker.Job(paramsList=paramsList)
 
         if startTime:
             job.startTime = startTime
@@ -283,6 +292,16 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
     class Proxied(list):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
+
+    class ProxiedChain(list):
+        def __init__(self, chain: 'BlockingQueueWorker.Chain'):
+            node = chain.rootLink
+            paramList = []
+            while node:
+                paramList.append(list(node))
+                node = node.getNext()
+
+            super().__init__(paramList)
 
 
 class SameThreadExecutor:
