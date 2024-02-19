@@ -276,7 +276,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         if steps < 0:
             raise RuntimeError("Can't handle negative steps. Use direction (self.CW or self.CCW) & steps > 0 properly.")
         signedDirection = 1 if direction == self.CW else -1
-        targetPosition = self.getCurrentPosition() + (signedDirection * steps)
+        targetPosition = int(self.getCurrentPosition() + (signedDirection * steps))
         self.isRunning = True
 
         if not self.useHoldingTorque:

@@ -159,6 +159,8 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
     def killWorker(self) -> 'BlockingQueueWorker.PoisonPill':
         pill = BlockingQueueWorker.PoisonPill(worker=self)
         self.work(pill, block=True)
+        time.sleep(0.1)
+        self.executor.shutdown()
         return pill
 
     def startWorker(self, jobConsumer) -> Future:
@@ -434,14 +436,16 @@ class ThreadPoolExecutorStackTraced(ThreadPoolExecutor):
             self._function_wrapper, fn, *args, **kwargs)
 
         if self.isDaemon:
-            del concurrent.futures.thread._threads_queues[list(self._threads)[0]]
+            for t in self._threads:
+                concurrent.futures.thread._threads_queues.pop(t, None)
 
         return future
 
     def shutdown(self, wait: bool = True, *, cancel_futures: bool = False) -> None:
-        rs = super().shutdown(wait, cancel_futures=cancel_futures)
         for t in self._threads:
             concurrent.futures.thread._threads_queues.pop(t, None)
+
+        rs = super().shutdown(wait, cancel_futures=cancel_futures)
         return rs
 
     def _function_wrapper(self, fn, *args, **kwargs):

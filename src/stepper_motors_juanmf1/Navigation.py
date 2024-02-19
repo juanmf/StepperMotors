@@ -55,7 +55,9 @@ class StaticNavigation(Navigation):
 
         steps = abs(controller.getCurrentPosition() - targetPosition)
         # Todo: find out  if -1 works as LOW (normally set to 0) for direction pin.
-        controller.setDirection(cmp(targetPosition, controller.getCurrentPosition()))
+        signedDirection = cmp(targetPosition, controller.getCurrentPosition())
+        controller.setDirection(signedDirection)
+        controller.accelerationStrategy.realDirection = signedDirection
         for i in range(steps):
             self.pulseController(controller)
 
@@ -68,7 +70,7 @@ class StaticNavigation(Navigation):
                    controller.multiprocessObserver)
 
             if abs(steps - i) == eventInAdvanceSteps:
-                EventDiapatcher.instance().publishMainLoop(eventName + "Advance", {'position': i})
+                EventDispatcher.instance().publishMainLoop(eventName + "Advance", {'position': i})
 
         accelerationStrategy.done()
         controller.setDirection(GPIO.LOW)
@@ -106,7 +108,7 @@ class DynamicNavigation(Navigation):
 
             if (abs(targetPosition - position) == eventInAdvanceSteps
                 and cmp(targetPosition, position) == controller.accelerationStrategy.realDirection):
-                EventDiapatcher.instance().publishMainLoop(eventName + "Advance", {'position': position})
+                EventDispatcher.instance().publishMainLoop(eventName + "Advance", {'position': position})
 
 
         # todo: check if still needed.
@@ -171,11 +173,11 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                     # Can't be, a running Driver because it's blocked, removed from pulsingControllers to check
                     # interrupted, then let go to pick up it's next job.
                     return
-                now = time.monotonic_ns()
+                pulseTime = time.monotonic_ns()
                 while self.pulsingControllers:
-                    pulseTime, pulsingController = self.pulsingControllers.popitem()
-                    if pulseTime > now:
-                        self.putPulsingController(pulseTime, pulsingController)
+                    duePulseTime, pulsingController = self.pulsingControllers.popitem()
+                    if duePulseTime > pulseTime:
+                        self.putPulsingController(duePulseTime, pulsingController)
                         break
                     if self.checkDone(pulsingController):
                         continue
@@ -184,7 +186,6 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
 
                 if duePulses:
                     GPIO.output(duePulses, self.high)
-                    pulseTime = time.monotonic_ns()
                     self.updateSleepTimes(dueControllers, pulseTime, count=2)
                     while pulseTime + self.driverPulseTimeNs > time.monotonic_ns():
                         # Small active wait in case updateSleepTimes() didn't consume Driver's min pulse time.
