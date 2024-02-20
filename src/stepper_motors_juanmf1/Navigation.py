@@ -49,28 +49,31 @@ class Navigation:
 
 
 class StaticNavigation(Navigation):
-    # Todo: StaticNavigation Does not work with job chains. Fix.
     def go(self, controller: MotorDriver, targetPosition, accelerationStrategy, fn, interruptPredicate,
            eventInAdvanceSteps=10, eventName="steppingComplete"):
-
-        steps = abs(controller.getCurrentPosition() - targetPosition)
+        initialPosition = controller.getCurrentPosition()
+        if initialPosition == targetPosition:
+            return
         # Todo: find out  if -1 works as LOW (normally set to 0) for direction pin.
         signedDirection = cmp(targetPosition, controller.getCurrentPosition())
         controller.setDirection(signedDirection)
         controller.accelerationStrategy.realDirection = signedDirection
-        for i in range(steps):
-            self.pulseController(controller)
 
-            accelerationStrategy.computeSleepTimeUs(i, steps)
-            # tprint(f"Sleeping for {accelerationStrategy.currentSleepTimeUs} uS.")
+        step = 0
+        totalSteps = abs(initialPosition - targetPosition)
+        for position in range(initialPosition, targetPosition, signedDirection):
+            self.pulseController(controller)
+            # Todo: see to make this work with actual position
+            accelerationStrategy.computeSleepTimeUs(step, totalSteps)
+            controller.setCurrentPosition(position)
             controller.usleep(accelerationStrategy.currentSleepTimeUs)
             # fn should not consume many CPU instructions to avoid delays between steps.
             if fn:
                 fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection,
                    controller.multiprocessObserver)
 
-            if abs(steps - i) == eventInAdvanceSteps:
-                EventDispatcher.instance().publishMainLoop(eventName + "Advance", {'position': i})
+            if abs(targetPosition - position) == eventInAdvanceSteps:
+                EventDispatcher.instance().publishMainLoop(eventName + "Advance", {'position': position})
 
         accelerationStrategy.done()
         controller.setDirection(GPIO.LOW)
