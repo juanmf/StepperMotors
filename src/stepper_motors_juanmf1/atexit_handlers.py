@@ -1,6 +1,5 @@
 import atexit
 import signal
-import time
 from multiprocessing import current_process
 
 from stepper_motors_juanmf1 import BlockingQueueWorker

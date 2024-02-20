@@ -1,8 +1,8 @@
 import ctypes
 import threading
 from abc import abstractmethod
-from concurrent.futures import Future
 import time
+from typing import Callable
 
 from RPi import GPIO
 import pigpio
@@ -93,9 +93,9 @@ class MotorDriver(BlockingQueueWorker):
             # Shows overhead of ~5-10 uS
             # Driver's pulse time is generally much shorter than step period, i.e. low duty-cycle.
             nanos = (micros * 1000)
-            start = time.time_ns()
+            start = time.monotonic_ns()
             while True:
-                end = time.time_ns()
+                end = time.monotonic_ns()
                 if end - start >= nanos:
                     break
         # Todo: relying on libc.usleep is hanging up on my RPI, it should be a good fit for sleep times 200us < t < 2ms
@@ -270,19 +270,19 @@ class BipolarStepperMotorDriver(MotorDriver):
             BipolarStepperMotorDriver.INITIALIZED = True
             GPIO.setmode(GPIO.BCM)
 
-    def _operateStepper(self, direction, steps, fn=None, jobCompleteEventNamePrefix="", eventInAdvanceSteps=10):
+    def _doOperateStepper(self, direction, steps, fn=None, jobCompleteEventNamePrefix="", eventInAdvanceSteps=10):
         """
-        Positive change in position is in clockwise direction, negative is counter clock wise.
-        callable signature is expected as fn(currentPosition, targetPosition, realDirection)
-        (realDirection from AccelerationStrategy)
-        interruptibility is determined by Navigation instance injected at construction time.
-        :param direction: self.CW or self.CCW
-        :param steps: Number of steps, as we rely on direction, an error is raised if negative values are sent.
-        # Todo: client knows targetPosition, would only need currentPosition and realDirection, but not every step.
-        :param fn: callable to execute after each step. Contract:
-            fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection)
-            Note it does not work with lambdas on multiprocess!
-        """
+                Positive change in position is in clockwise direction, negative is counter clock wise.
+                callable signature is expected as fn(currentPosition, targetPosition, realDirection)
+                (realDirection from AccelerationStrategy)
+                interruptibility is determined by Navigation instance injected at construction time.
+                :param direction: self.CW or self.CCW
+                :param steps: Number of steps, as we rely on direction, an error is raised if negative values are sent.
+                # Todo: client knows targetPosition, would only need currentPosition and realDirection, but not every step.
+                :param fn: callable to execute after each step. Contract:
+                    fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection)
+                    Note it does not work with lambdas on multiprocess!
+                """
         if steps < 0:
             raise RuntimeError("Can't handle negative steps. Use direction (self.CW or self.CCW) & steps > 0 properly.")
         signedDirection = 1 if direction == self.CW else -1
@@ -293,10 +293,11 @@ class BipolarStepperMotorDriver(MotorDriver):
             tprint(f"Waking! Calling setSleepMode with sleepOn=False")
             self.setSleepMode(sleepOn=False)
             self.setEnableMode(enableOn=True)
-            
+
         eventName = jobCompleteEventNamePrefix + self._steppingCompleteEventName
         # Multiprocess event propagation is in the order of 0.003 seconds or ~1 step at 300 PPS.
-        block = self.navigation.go(self, targetPosition, self.accelerationStrategy, fn, self.isInterrupted, 
+
+        block = self.navigation.go(self, targetPosition, self.accelerationStrategy, fn, self.isInterrupted,
                                    eventInAdvanceSteps=eventInAdvanceSteps, eventName=eventName)
         block.result()
         if self.navigation.isInterruptible() and self.isInterrupted():
@@ -313,6 +314,16 @@ class BipolarStepperMotorDriver(MotorDriver):
                                                     'startTime': startTime,
                                                     'endTime': time.monotonic_ns()
                                                     })
+
+    def _operateStepper(self, direction, steps, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
+                        eventInAdvanceSteps=10):
+        if maxPpsOverride:
+            oldPps = self.accelerationStrategy.getMaxPPS()
+            self.accelerationStrategy.setMaxPPS(maxPpsOverride)
+            self._doOperateStepper(direction, steps, fn, jobCompleteEventNamePrefix,eventInAdvanceSteps)
+            self.accelerationStrategy.setMaxPPS(oldPps)
+        else:
+            self._doOperateStepper(direction, steps, fn, jobCompleteEventNamePrefix,eventInAdvanceSteps)
 
     def setCurrentPosition(self, position):
         if self.isProxy:
@@ -340,16 +351,38 @@ class BipolarStepperMotorDriver(MotorDriver):
     def isInterrupted(self):
         return self.hasQueuedJobs()
 
-    def signedSteps(self, steps, fn=None, jobCompleteEventNamePrefix=None, eventInAdvanceSteps=10):
-        call = self.SIGNED_STEPS_CALLABLES.get(sign(steps), lambda _steps, _fn, _jobCompleteEventNamePrefix,
-                                                            _eventInAdvanceSteps: None)
-        return call(abs(steps), fn, jobCompleteEventNamePrefix, eventInAdvanceSteps)
+    def signedSteps(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
+                    eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+        """
+        _operateStepper
+        @param steps: signed steps, -100 is 100 steps counterclockwise, 100 is 100 steps clockwise.
+        @param fn: Stepping callback. Will be called on each step with contract:
+                   fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection,
+                      controller.multiprocessObserver)
+        @param jobCompleteEventNamePrefix: "<prefix>steppingComplete[Advance|FinalStep]" events will be published on
+                                           each job. "<prefix>steppingCompleteAdvance" eventInAdvanceSteps before done.
+        @param maxPpsOverride: Allows for motor to run at a speed different from StepperMotor.getMaxPps(), ideally lower
+        @param eventInAdvanceSteps: How many steps before done should "<prefix>steppingCompleteAdvance" be published.
+                                    Your app might wat to perform tasks in preparation for final step.
+        @return:
+        """
+        call: Callable[[int, Callable, str, int, int], BlockingQueueWorker.Job or None] = (
+            self.SIGNED_STEPS_CALLABLES.get(sign(steps), lambda _steps, _fn, _jobCompleteEventNamePrefix,
+                                            _maxPpsOverride, _eventInAdvanceSteps: None))
 
-    def stepClockWise(self, steps, fn=None, jobCompleteEventNamePrefix=None, eventInAdvanceSteps=10):
-        return self.work([self.CW, steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps], block=True)
+        return call(abs(steps), fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps)
 
-    def stepCounterClockWise(self, steps, fn=None, jobCompleteEventNamePrefix=None, eventInAdvanceSteps=10):
-        return self.work([self.CCW, steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps], block=True)
+    def stepClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
+                      eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+        return self.work(
+            paramsList=[self.CW, steps, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps],
+            block=True)
+
+    def stepCounterClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
+                             eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+        return self.work(
+            paramsList=[self.CCW, steps, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps],
+            block=True)
 
     def setDirection(self, directionState):
         # Todo: update sharedMemory
@@ -451,16 +484,21 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                          isProxy=isProxy,
                          jobCompletionObserver=jobCompletionObserver)
 
-        self.SIGNED_STEPS_CALLABLES = {-1: lambda steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps:
-        self.stepCounterClockWise(steps,
-                                  fn,
-                                  jobCompleteEventNamePrefix,
-                                  eventInAdvanceSteps),
-                                       1: lambda steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps:
-                                       self.stepClockWise(steps,
-                                                          fn,
-                                                          jobCompleteEventNamePrefix,
-                                                          eventInAdvanceSteps)}
+        self.SIGNED_STEPS_CALLABLES = {
+                -1: lambda steps, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps:
+                        self.stepCounterClockWise(steps,
+                                                  fn=fn,
+                                                  jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                                                  maxPpsOverride=maxPpsOverride,
+                                                  eventInAdvanceSteps=eventInAdvanceSteps),
+
+                1: lambda steps, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps:
+                        self.stepClockWise(steps,
+                                           fn=fn,
+                                           jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                                           maxPpsOverride=maxPpsOverride,
+                                           eventInAdvanceSteps=eventInAdvanceSteps)
+        }
 
         tprint(f"sleepPin: {self.sleepGpioPin}.")
         tprint(f"useHOldingToruqe: {self.useHoldingTorque}")

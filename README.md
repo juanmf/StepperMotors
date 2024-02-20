@@ -64,7 +64,9 @@ All motors driven by dedicated DRV8825.
 ### Happy path
 
 If everything works fine (on my RPI this method gets stuck.)
-`pip install -i https://test.pypi.org/simple/ stepper-motors-juanmf1==0.0.2`
+
+`pip install -i https://test.pypi.org/simple/ stepper-motors-juanmf1`
+
 
 ### Manually
 
@@ -193,9 +195,9 @@ Alternative moveArm implementation version >0.0.8:
 ```Python
 def moveArm(self, elbowDelta, shoulderDelta, handDelta):
     # moving the motors; encapsulating signed and zero delta logic in `signedSteps` 
-    self.elbow.signedSteps(elbowDelta, self.elbowPositionListener)
-    self.shoulder.signedSteps(shoulderDelta, self.shoulderPositionListener)
-    self.hand.signedSteps(handDelta, self.handPositionListener)
+    self.elbow.signedSteps(elbowDelta, fn=self.elbowPositionListener)
+    self.shoulder.signedSteps(shoulderDelta, fn=self.shoulderPositionListener)
+    self.hand.signedSteps(handDelta, fn=self.handPositionListener)
         
 ```
 
@@ -564,11 +566,11 @@ class PolarCoordinatesSample:
     eventNamePrefix = "AimingComplete"
     # Events will result in 4 combinations: "[azimuth|elevation]AimingCompletesteppingComplete[Advance|FinalStep]"
     if azimuthDelta != 0:
-      azimuthJob = self.azimuthDriver.signedSteps(azimuthDelta, self.steppingCallback,
+      azimuthJob = self.azimuthDriver.signedSteps(azimuthDelta, fn=self.steppingCallback,
                                                   jobCompleteEventNamePrefix="azimuth" + eventNamePrefix)
       self.awaitAzimuthReadyEvents()
     if elevationDelta != 0:
-      elevationJob = self.elevationDriver.signedSteps(elevationDelta, self.steppingCallback,
+      elevationJob = self.elevationDriver.signedSteps(elevationDelta, fn=self.steppingCallback,
                                                       jobCompleteEventNamePrefix="elevation" + eventNamePrefix)
       self.awaitElevationReadyEvents()
 

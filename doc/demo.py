@@ -9,13 +9,13 @@ from stepper_motors_juanmf1.EventDispatcher import EventDispatcher
 from stepper_motors_juanmf1.StepperMotor import PG35S_D48_HHC2
 
 
-class PolarCoordinatesSample:
+class MultiProcessPolarCoordinatesSample:
 
     """
     Initialization:
-      Register even Listeners.
+      Register event Listeners.
       Start motor driver(s) in child process.
-      Setup MultiprocessObserver with publisher/observer callback pairs.
+      Setup MultiprocessObserver with publisher/observer callback pairs. For custom notification each 100th step.
     """
     def __init__(self, controllerFactory: MultiProcessingControllerFactory):
         self.fireReadyEventsAwaited = [
@@ -77,7 +77,7 @@ class PolarCoordinatesSample:
         eventNamePrefix = "AimingComplete"
         # Events will result in 4 combinations: "[azimuth|elevation]AimingCompletesteppingComplete[Advance|FinalStep]"
         if azimuthDelta != 0:
-            azimuthJob = self.azimuthDriver.signedSteps(azimuthDelta, self.steppingCallback,
+            azimuthJob = self.azimuthDriver.signedSteps(azimuthDelta, fn=self.steppingCallback,
                                                         jobCompleteEventNamePrefix="azimuth" + eventNamePrefix)
             self.awaitAzimuthReadyEvents()
 

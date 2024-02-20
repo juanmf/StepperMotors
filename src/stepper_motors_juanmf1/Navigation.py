@@ -1,4 +1,3 @@
-# Static or responsive/dynamic navigation implementations.
 import threading
 import time
 import traceback

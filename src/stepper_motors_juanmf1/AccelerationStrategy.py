@@ -28,8 +28,8 @@ class AccelerationStrategy:
         self.currentPps = self.minPps
         minSleepTimeSeconds = stepperMotor.getMinSleepTime()
         maxSleepTimeSeconds = stepperMotor.getMaxSleepTime()
-        self.minSleepTimeUs = minSleepTimeSeconds * 1_000_000
-        self.maxSleepTimeUs = maxSleepTimeSeconds * 1_000_000
+        self.minSleepTimeUs = int(minSleepTimeSeconds * 1_000_000)
+        self.maxSleepTimeUs = int(maxSleepTimeSeconds * 1_000_000)
 
         # Should start at max sleep time, override in subclasses.
         self.currentSleepTimeUs = self.maxSleepTimeUs
@@ -37,6 +37,13 @@ class AccelerationStrategy:
 
         self.delayPlanner = delayPlanner
         delayPlanner.setAccelerationStrategy(self)
+
+    def setMaxPPS(self, maxPps):
+        self.maxPps = maxPps
+        self.minSleepTimeUs = int(1_000_000 / maxPps)
+
+    def getMaxPPS(self):
+        return self.maxPps
 
     def getCurrentSleepUs(self):
         return self.currentSleepTimeUs

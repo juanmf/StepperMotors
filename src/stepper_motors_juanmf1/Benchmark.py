@@ -8,7 +8,7 @@ from stepper_motors_juanmf1.AccelerationStrategy import CustomAccelerationPerPps
 from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver
 from stepper_motors_juanmf1.ControllerFactory import DynamicControllerFactory
 from stepper_motors_juanmf1.StepperMotor import GenericStepper
-from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_current_thread_only, flush_current_thread_only
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_current_thread_only
 
 
 class Benchmark:
@@ -97,7 +97,7 @@ class Benchmark:
     def findMinPPS(self, controller: BipolarStepperMotorDriver):
         picked = {'picked': False, 'pps': 0}
         fn = lambda c, t, realDirection: self.keepMotorGoing(controller, c, t, picked)
-        controller.stepClockWise(10_000, fn)
+        controller.stepClockWise(10_000, fn=fn)
         while not picked['picked']:
 
             tprint(f"picked['picked']: {picked['picked']}")
@@ -112,7 +112,7 @@ class Benchmark:
     def keepMotorGoing(self, controller, currentPosition, targetPosition, picked):
         if not picked['picked'] and currentPosition % 1000 == 999:
             fn = lambda c, t, realDirection: self.keepMotorGoing(controller, c, t, picked)
-            controller.stepClockWise(10_000, fn)
+            controller.stepClockWise(10_000, fn=fn)
 
     """
     Find max speed specific methods
@@ -123,7 +123,7 @@ class Benchmark:
         tprint("")
         picked = {'picked': False, 'pps': 0}
         fn = lambda c, t, realDirection: self.keepMotorGoingUp(controller, c, controller.getCurrentPosition(), picked)
-        controller.stepClockWise(10_000, fn)
+        controller.stepClockWise(10_000, fn=fn)
         flush_current_thread_only()
         listen_keyboard(
             on_press=lambda k: self.findMaxSpeedControls(k, controller, lambda: self.setPicked(controller, picked)),
@@ -141,7 +141,7 @@ class Benchmark:
                 == 0):
             fn = lambda c, t, realDirection: self.keepMotorGoingUp(controller, c, currentPosition, picked)
             controller.accelerationStrategy.speedUp()
-            controller.stepClockWise(10_000, fn)
+            controller.stepClockWise(10_000, fn=fn)
 
     """
     Find speed boost specific methods
@@ -167,7 +167,7 @@ class Benchmark:
         tprint(f"speedBoosts: {speedBoosts}")
         tprint("")
         flush_current_thread_only()
-        controller.stepClockWise(10_000, lambda c, t, d: self.keepMotorSpeedingUp(controller, c, t, speedBoosts))
+        controller.stepClockWise(10_000, fn=lambda c, t, d: self.keepMotorSpeedingUp(controller, c, t, speedBoosts))
 
         return speedBoosts
 
@@ -258,7 +258,7 @@ class Benchmark:
 
         self.stoppingMotor(True)
         controller.accelerationStrategy.willStop = True
-        controller.stepClockWise(5, lambda a, b, c: self.resetStoppingFlag(a, b))
+        controller.stepClockWise(5, fn=lambda a, b, c: self.resetStoppingFlag(a, b))
         time.sleep(0.5)
         # Safety measure.
         self.stoppingMotor(False)
