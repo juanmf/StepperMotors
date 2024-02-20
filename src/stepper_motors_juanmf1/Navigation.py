@@ -24,13 +24,13 @@ class Navigation:
     def setDriverPulseTimeNs(self, *, driverPulseTimeUs):
         self.driverPulseTimeNs = 1000 * driverPulseTimeUs
 
-    @classmethod
-    def get_completed_future(cls):
+    @staticmethod
+    def get_completed_future():
         # Lazily initialize the Future if not already done
-        if cls._COMPLETED_FUTURE is None:
-            cls._COMPLETED_FUTURE = Future()
-            cls._COMPLETED_FUTURE.set_result(True)
-        return cls._COMPLETED_FUTURE
+        if Navigation._COMPLETED_FUTURE is None:
+            Navigation._COMPLETED_FUTURE = Future()
+            Navigation._COMPLETED_FUTURE.set_result(True)
+        return Navigation._COMPLETED_FUTURE
 
     def go(self, controller, targetPosition, accelerationStrategy, fn, interruptPredicate, eventInAdvanceSteps=10,
            eventName="steppingComplete"):
@@ -49,7 +49,7 @@ class Navigation:
 
 
 class StaticNavigation(Navigation):
-
+    # Todo: StaticNavigation Does not work with job chains. Fix.
     def go(self, controller: MotorDriver, targetPosition, accelerationStrategy, fn, interruptPredicate,
            eventInAdvanceSteps=10, eventName="steppingComplete"):
 
