@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "stepper_motors_juanmf1"
 # I'll use the convention that even numbers are "stable" releases. Odd numbers need more testing.
-version = "0.0.17"
+version = "0.0.19"
 authors = [
   { name="Juan Manuel Fernandez", email="juanmf@gmail.com" },
 ]
