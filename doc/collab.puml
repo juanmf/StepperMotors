@@ -219,7 +219,7 @@ ClientApp <.right. BipolarStepperMotorDriver::operateStepper : stepCallbackFn(cu
 ''' Notes
 note as N1
 Benchmark output can be added
-to StepperMotor.TORQUE_CHARACTERISTICS
+to StepperMotor.TORQUE_CURVE
 so that CustomAccelerationPerPps optimizes
 motor acceleration at runtime.
 end note

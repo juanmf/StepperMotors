@@ -1,7 +1,3 @@
-import threading
-
-
-
 class StepperMotor:
     """
 
@@ -29,34 +25,56 @@ class StepperMotor:
     # Must be overriden
     MIN_PPS = None
     # Must be a map pps -> torque
-    TORQUE_CHARACTERISTICS = None
+    TORQUE_CURVE = None
     TORQUE_UNIT = None
     SPR = None
 
-    def __init__(self, pps, sleepTime, minPps, spr):
-        super().__init__()
+    def __init__(self, *, minPps, maxPps, minSleepTime, maxSleepTime, spr, torqueCurve=None):
+        """
+
+        @param minPps: Ideally Min speed in PPS at which the motor shows continuity between steps.
+        @param maxPps: Max PPS the motor can keep up with, note that it changes with load.
+        @param minSleepTime: Sleep time between steps. Normally 1 / maxPps, in seconds
+        @param maxSleepTime: Sleep time between steps. Normally 1 / minPps, in seconds
+        @param spr: Steps per revolution. reciprocal to angle per step: (360 / anglePerStep) e.g. 1.8deg => 200
+        @param torqueCurve: With Benchmark module find the max increase in PPS at each speed, used by
+                            CustomAccelerationPerPps to reach max speed in minimum number of steps, under CURRENT load.
+                            Format: [(minPPS, PPSIncrease1), (minPPS+PPSIncrease1, PPSIncrease2), ..., (maxPPS, 0)]
+                            Note: CustomAccelerationPerPps ignores self.minPps & self.maxPps
+        """
         # Sets GPIO pins
         # Todo: assess removal.
-        self.settingsLock = threading.Lock()
-        self.sleepTime = sleepTime
-        # Pulses per second
-        self.pps = pps
-        # Steps per revolution
-        if self.MIN_PPS is None:
-            self.MIN_PPS = minPps
-        self.minSleepTime = 1 / self.MIN_PPS
+        # [Min/Max] Pulses per second
+        self.minPps = minPps
+        self.maxPps = maxPps
+
+        # In Seconds
+        self.maxSleepTime = maxSleepTime
+        self.minSleepTime = minSleepTime
+        
+        # StepsPerRevolution
         self.spr = spr
+        
+        # For use with CustomAccelerationPerPps, to find out with Benchmark module. 
+        self.torqueCurve = torqueCurve
+            
+    def getSpr(self):
+        return self.spr
+    
+    def getMinPps(self):
+        return self.minPps
+    
+    def getMaxPps(self):
+        return self.maxPps
 
-    def readSettings(self):
-        with self.settingsLock:
-            pps = self.pps
-            sleepTime = self.sleepTime
-        return pps, sleepTime
+    def getMinSleepTime(self):
+        return self.minSleepTime
 
-    def changeSettings(self, pps, sleepTime):
-        with self.settingsLock:
-            self.pps = pps
-            self.sleepTime = sleepTime
+    def getMaxSleepTime(self):
+        return self.maxSleepTime
+
+    def getTorqueCurve(self):
+        return self.maxSleepTime
 
 
 class PG35S_D48_HHC2(StepperMotor):
@@ -83,12 +101,12 @@ class PG35S_D48_HHC2(StepperMotor):
     """
     Gathered with module Benchmark
     format: (PPS, increment) Speeds up the fastest from 200 to 1044 PPS.
-    TORQUE_CHARACTERISTICS = [(200, 300), (500, 200), (700, 100), (800, 50), (850, 25), (875, 25), (900, 1)]
+    TORQUE_CURVE = [(200, 300), (500, 200), (700, 100), (800, 50), (850, 25), (875, 25), (900, 1)]
     """
-    # TORQUE_CHARACTERISTICS = [(180.0, 320), (500.0, 240), (740.0, 205), (945.0, 0)]
-    # TORQUE_CHARACTERISTICS = [(200, 150), (350, 200), (550, 100), (650, 100), (750, 80), (830, 20), (850, 0)]
-    # TORQUE_CHARACTERISTICS = [(200, 100), (300, 150), (450, 100), (550, 0)]
-    TORQUE_CHARACTERISTICS = [(200, 150), (350, 0)]
+    # TORQUE_CURVE = [(180.0, 320), (500.0, 240), (740.0, 205), (945.0, 0)]
+    # TORQUE_CURVE = [(200, 150), (350, 200), (550, 100), (650, 100), (750, 80), (830, 20), (850, 0)]
+    # TORQUE_CURVE = [(200, 100), (300, 150), (450, 100), (550, 0)]
+    TORQUE_CURVE = [(200, 150), (350, 0)]
 
     """
     Steps per Revolution with 1.8 deg per step
@@ -130,12 +148,20 @@ class PG35S_D48_HHC2(StepperMotor):
 
     def __init__(self, loaded: bool = True, minPps=None):
         minPps = minPps if minPps else self.MIN_PPS
-        super().__init__(self.PPS_MAP[loaded], self.SLEEP_TIME_MAP[loaded], minPps, spr=self.SPR)
+        
+        super().__init__(maxPps=self.PPS_MAP[loaded], 
+                         minSleepTime=PG35S_D48_HHC2.SLEEP_TIME_MAP[loaded],
+                         maxSleepTime=1 / minPps,
+                         minPps=minPps,
+                         spr=PG35S_D48_HHC2.SPR,
+                         torqueCurve=PG35S_D48_HHC2.TORQUE_CURVE)
+
 
 #  Soon:
 # STEPPERONLINE 0.9deg Nema 17 Stepper Motor Bipolar 1.5A 30Ncm
 # Nema 17 Motor 42BYGH 1.8 Degree Body 38MM 4-Lead Wire 1.5A 42N.cm (60oz.in)
 # STEPPERONLINE Nema 17 Stepper Motor Bipolar 2A 59Ncm(84oz.in) 48mm Body 4-Lead W
+
 
 class Nema23_3Nm_23HS45_4204S(StepperMotor):
     """
@@ -154,7 +180,7 @@ class Nema23_3Nm_23HS45_4204S(StepperMotor):
     Gathered with module Benchmark
     format: (PPS, increment) Speeds up the fastest from 200 to 1044 PPS.
     """
-    TORQUE_CHARACTERISTICS = [(100, 150), (250, 0)]
+    TORQUE_CURVE = [(100, 150), (250, 0)]
 
     """
     Steps per Revolution with 1.8 deg per step
@@ -173,7 +199,13 @@ class Nema23_3Nm_23HS45_4204S(StepperMotor):
 
     def __init__(self, loaded: bool = True, minPps=None):
         minPps = minPps if minPps else self.MIN_PPS
-        super().__init__(self.PPS_MAP[loaded], self.SLEEP_TIME_MAP[loaded], minPps, spr=self.SPR)
+
+        super().__init__(maxPps=self.PPS_MAP[loaded],
+                         minSleepTime=PG35S_D48_HHC2.SLEEP_TIME_MAP[loaded],
+                         maxSleepTime=1 / minPps,
+                         minPps=minPps,
+                         spr=PG35S_D48_HHC2.SPR,
+                         torqueCurve=PG35S_D48_HHC2.TORQUE_CURVE)
 
 class Nema17_59Ncm_17HS19_2004S1(StepperMotor):
     """
@@ -204,7 +236,7 @@ class Nema17_59Ncm_17HS19_2004S1(StepperMotor):
     Gathered with module Benchmark
     format: (PPS, increment) Speeds up the fastest from 200 to 1044 PPS.
     """
-    TORQUE_CHARACTERISTICS = [(200, 150), (350, 0)]
+    TORQUE_CURVE = [(200, 150), (350, 0)]
 
     """
     Steps per Revolution with 1.8 deg per step
@@ -223,7 +255,13 @@ class Nema17_59Ncm_17HS19_2004S1(StepperMotor):
 
     def __init__(self, loaded: bool = True, minPps=None):
         minPps = minPps if minPps else self.MIN_PPS
-        super().__init__(self.PPS_MAP[loaded], self.SLEEP_TIME_MAP[loaded], minPps, spr=self.SPR)
+
+        super().__init__(maxPps=self.PPS_MAP[loaded],
+                         minSleepTime=PG35S_D48_HHC2.SLEEP_TIME_MAP[loaded],
+                         maxSleepTime=1 / minPps,
+                         minPps=minPps,
+                         spr=PG35S_D48_HHC2.SPR,
+                         torqueCurve=PG35S_D48_HHC2.TORQUE_CURVE)
 
 
 class Nema17_42Ncm_17HS4401(StepperMotor):
@@ -257,7 +295,7 @@ class Nema17_42Ncm_17HS4401(StepperMotor):
     Gathered with module Benchmark
     format: (PPS, increment) Speeds up the fastest from 200 to 1044 PPS.
     """
-    TORQUE_CHARACTERISTICS = [(200, 150), (350, 0)]
+    TORQUE_CURVE = [(200, 150), (350, 0)]
 
     """
     Steps per Revolution with 1.8 deg per step
@@ -276,9 +314,73 @@ class Nema17_42Ncm_17HS4401(StepperMotor):
 
     def __init__(self, loaded: bool = True, minPps=None):
         minPps = minPps if minPps else self.MIN_PPS
-        super().__init__(self.PPS_MAP[loaded], self.SLEEP_TIME_MAP[loaded], minPps, spr=self.SPR)
+
+        super().__init__(maxPps=self.PPS_MAP[loaded],
+                         minSleepTime=PG35S_D48_HHC2.SLEEP_TIME_MAP[loaded],
+                         maxSleepTime=1 / minPps,
+                         minPps=minPps,
+                         spr=PG35S_D48_HHC2.SPR,
+                         torqueCurve=PG35S_D48_HHC2.TORQUE_CURVE)
+
 
 class GenericStepper(StepperMotor):
 
-    def __init__(self, *, maxPps, minPps=150, spr=200):
-        super().__init__(maxPps, 1 / maxPps, minPps, spr)
+    def __init__(self, *, minPps, maxPps, minSleepTime, maxSleepTime, spr=200, torqueCurve=None):
+        super().__init__(maxPps=maxPps,
+                         minSleepTime=minSleepTime,
+                         maxSleepTime=maxSleepTime,
+                         minPps=minPps,
+                         spr=spr,
+                         torqueCurve=torqueCurve)
+
+    class Builder:
+        def __init__(self, stepperMotor=None):
+            self.minPps = None
+            self.maxPps = None
+            self.minSleepTime = None
+            self.maxSleepTime = None
+            self.spr = None
+            self.torqueCurve = None
+            if stepperMotor:
+                self.copy(stepperMotor)
+
+        def build(self):
+            return GenericStepper(maxPps=self.maxPps,
+                                  minSleepTime=self.minSleepTime,
+                                  maxSleepTime=self.maxSleepTime,
+                                  minPps=self.minPps,
+                                  spr=self.spr,
+                                  torqueCurve=self.torqueCurve)
+
+        def copy(self, stepperMotor):
+            self.minPps = stepperMotor.getMinPps()
+            self.maxPps = stepperMotor.getMaxPps()
+            self.minSleepTime = stepperMotor.getMinSleepTime()
+            self.maxSleepTime = stepperMotor.getMaxSleepTime()
+            self.spr = stepperMotor.getSpr()
+            self.torqueCurve = stepperMotor.getTorqueCurve()
+            return self
+
+        def withSpr(self, spr):
+            self.spr = spr
+            return self
+
+        def withMinPps(self, minPps):
+            self.minPps = minPps
+            if self.maxSleepTime is None:
+                self.maxSleepTime = 1 / minPps
+            return self
+
+        def withMaxPps(self, maxPps):
+            self.maxPps = maxPps
+            if self.minSleepTime is None:
+                self.minSleepTime = 1 / maxPps
+            return self
+
+        def withMinSleepTime(self, minSleepTime):
+            self.minSleepTime = minSleepTime
+            return self
+
+        def withMaxSleepTime(self, maxSleepTime):
+            self.maxSleepTime = maxSleepTime
+            return self

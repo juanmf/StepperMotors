@@ -12,21 +12,24 @@ class AccelerationStrategy:
 
     def __init__(self, stepperMotor: StepperMotor, delayPlanner, rampSteps=None):
         """
-        :param stepperMotor:
-        :param delayPlanner:
-        :param rampSteps:
+        :param stepperMotor: Stepper to take parameters from, like [min/max]PPS and so on.
+        :param delayPlanner: delayPlanner to use to compute sleep time between steps as motor ramps up/down & while
+                             steady
+        :param rampSteps: How many steps it takes to ramp the motor. It assumes same number of steps to ramp up or down
         """
         self.realDirection = None
+        # Todo: evaluate having rampUpSteps & rampDownSteps as it might differ.
         self.rampSteps = rampSteps
 
-        self.maxPps = stepperMotor.pps
-        self.minSleepTimeSeconds = stepperMotor.sleepTime
-        self.minPps = stepperMotor.MIN_PPS
+        self.maxPps = stepperMotor.getMaxPps()
+        self.minPps = stepperMotor.getMinPps()
 
         # Keeps track of speed, in terms of pps, and direction (-, +) useful for momentum considerations.
         self.currentPps = self.minPps
-        self.minSleepTimeUs = self.minSleepTimeSeconds * 1_000_000
-        self.maxSleepTimeUs = 1_000_000 / self.minPps
+        minSleepTimeSeconds = stepperMotor.getMinSleepTime()
+        maxSleepTimeSeconds = stepperMotor.getMaxSleepTime()
+        self.minSleepTimeUs = minSleepTimeSeconds * 1_000_000
+        self.maxSleepTimeUs = maxSleepTimeSeconds * 1_000_000
 
         # Should start at max sleep time, override in subclasses.
         self.currentSleepTimeUs = self.maxSleepTimeUs
@@ -199,7 +202,7 @@ class CustomAccelerationPerPps(AccelerationStrategy):
     --
 
     But not quite. I decided to gather torque characteristics by benchmarking the motor {@see Benchmark} class
-    so that the maximum speed boost at each "current speed" is recorded into the motor class's TORQUE_CHARACTERISTICS.
+    so that the maximum speed boost at each "current speed" is recorded into the motor class's TORQUE_CURVE.
     Alternatively accepts an explicit set of multipliers to apply to current PPS as a proxy to instantaneous torque
     see `transformations`.
     """
@@ -210,7 +213,7 @@ class CustomAccelerationPerPps(AccelerationStrategy):
         array of tuples with max speed boost at given PPS starting from stepperMotor.MIN_PPS 
         [(minPPS, speedIncrement_1), (minPPS * speedIncrement_1, speedIncrement_2), ..., (maxPPS, 0)]
         """
-        self.transformations = transformations if transformations is not None else stepperMotor.TORQUE_CHARACTERISTICS
+        self.transformations = transformations if transformations is not None else stepperMotor.TORQUE_CURVE
         self.transformationsPPS = [item[0] for item in self.transformations]
         self.rampSteps = len(self.transformationsPPS)
         self.minPps = self.transformationsPPS[0]
@@ -606,6 +609,7 @@ class DynamicDelayPlanner(DelayPlanner):
 
     class Rest(State):
         def __new__(cls, *args, **kwargs):
+            # Todo: use same approach for Singleton as EventDispatcher.
             if not getattr(cls, '_instance', None):
                 cls._instance = super().__new__(cls)
             return cls._instance

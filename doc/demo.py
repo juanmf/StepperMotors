@@ -2,11 +2,11 @@ import ctypes
 from functools import partial
 from multiprocess import Value, Event
 
-from src.stepper_motors_juanmf1.Controller import DRV8825MotorDriver
-from src.stepper_motors_juanmf1.ControllerFactory import MultiProcessingControllerFactory, ControllerFactory
-from src.stepper_motors_juanmf1.BlockingQueueWorker import MultiprocessObserver
-from src.stepper_motors_juanmf1.EventDispatcher import EventDispatcher
-from src.stepper_motors_juanmf1.StepperMotor import PG35S_D48_HHC2
+from stepper_motors_juanmf1.Controller import DRV8825MotorDriver
+from stepper_motors_juanmf1.ControllerFactory import MultiProcessingControllerFactory, ControllerFactory
+from stepper_motors_juanmf1.BlockingQueueWorker import MultiprocessObserver
+from stepper_motors_juanmf1.EventDispatcher import EventDispatcher
+from stepper_motors_juanmf1.StepperMotor import PG35S_D48_HHC2
 
 
 class PolarCoordinatesSample:

@@ -28,12 +28,20 @@ class MotorDriver(BlockingQueueWorker):
     INSTANCES_COUNT = 0
     PULSE_TIME_MICROS = None
 
-    def __init__(self, *, accelerationStrategy, workerName, jobQueueMaxSize=2, jobQueue=None, sharedMemory=None, 
-                 isProxy=False, jobCompletionObserver=None):
+    def __init__(self, *, stepperMotor, accelerationStrategy, workerName, jobQueueMaxSize=2, jobQueue=None,
+                 sharedMemory=None, isProxy=False, jobCompletionObserver=None):
+
         workerName = f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_" \
                      if workerName is None else workerName
-        super().__init__(self._operateStepper, jobQueueMaxSize=jobQueueMaxSize, workerName=workerName,
-                         jobQueue=jobQueue, isProxy=isProxy, jobCompletionObserver=jobCompletionObserver)
+        super().__init__(self._operateStepper,
+                         jobQueueMaxSize=jobQueueMaxSize,
+                         workerName=workerName,
+                         jobQueue=jobQueue,
+                         isProxy=isProxy,
+                         jobCompletionObserver=jobCompletionObserver)
+
+        MotorDriver.INSTANCES_COUNT += 1
+        self.stepperMotor = stepperMotor
         self.accelerationStrategy = accelerationStrategy
         if sharedMemory is not None:
             self.sharedLock = sharedMemory[0]
@@ -196,13 +204,15 @@ class BipolarStepperMotorDriver(MotorDriver):
         [GPIO_26]   37 * * 38 [GPIO_20]
         [GND]       39 * * 40 [GPIO_21]
         """
-        super().__init__(accelerationStrategy=accelerationStrategy, jobQueueMaxSize=2,
-                         workerName=f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_"
-                         if workerName is None else workerName, jobQueue=jobQueue, sharedMemory=sharedMemory,
-                         isProxy=isProxy, jobCompletionObserver=jobCompletionObserver)
+        super().__init__(stepperMotor=stepperMotor,
+                         accelerationStrategy=accelerationStrategy,
+                         workerName=workerName,
+                         jobQueue=jobQueue,
+                         sharedMemory=sharedMemory,
+                         isProxy=isProxy,
+                         jobCompletionObserver=jobCompletionObserver)
+
         self._steppingCompleteEventName = steppingCompleteEventName
-        MotorDriver.INSTANCES_COUNT += 1
-        self.stepperMotor = stepperMotor
         self.enableGpioPin = enableGpioPin
         self.modeGpioPins = modeGpioPins  # Microstep Resolution GPIO Pins
         self.stepsMode = stepsMode
@@ -426,22 +436,31 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         @param modeGpioPins: [MODE_0..2]
         @param enableGpioPin: [EN] LOW = enabled; HIGH chip disabled
         """
-        super().__init__(stepperMotor=stepperMotor, accelerationStrategy=accelerationStrategy, 
-                         directionGpioPin=directionGpioPin, stepGpioPin=stepGpioPin, navigation=navigation,
-                         sleepGpioPin=sleepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
-                         enableGpioPin=enableGpioPin, jobQueue=jobQueue, sharedMemory=sharedMemory, isProxy=isProxy,
+        super().__init__(stepperMotor=stepperMotor,
+                         accelerationStrategy=accelerationStrategy,
+                         navigation=navigation,
+                         directionGpioPin=directionGpioPin,
+                         stepGpioPin=stepGpioPin,
+                         sleepGpioPin=sleepGpioPin,
+                         enableGpioPin=enableGpioPin,
+                         stepsMode=stepsMode,
+                         modeGpioPins=modeGpioPins,
                          steppingCompleteEventName=steppingCompleteEventName,
+                         jobQueue=jobQueue,
+                         sharedMemory=sharedMemory,
+                         isProxy=isProxy,
                          jobCompletionObserver=jobCompletionObserver)
+
         self.SIGNED_STEPS_CALLABLES = {-1: lambda steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps:
-                                           self.stepCounterClockWise(steps,
-                                                                     fn,
-                                                                     jobCompleteEventNamePrefix,
-                                                                     eventInAdvanceSteps),
+        self.stepCounterClockWise(steps,
+                                  fn,
+                                  jobCompleteEventNamePrefix,
+                                  eventInAdvanceSteps),
                                        1: lambda steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps:
-                                          self.stepClockWise(steps,
-                                                             fn,
-                                                             jobCompleteEventNamePrefix,
-                                                             eventInAdvanceSteps)}
+                                       self.stepClockWise(steps,
+                                                          fn,
+                                                          jobCompleteEventNamePrefix,
+                                                          eventInAdvanceSteps)}
 
         tprint(f"sleepPin: {self.sleepGpioPin}.")
         tprint(f"useHOldingToruqe: {self.useHoldingTorque}")

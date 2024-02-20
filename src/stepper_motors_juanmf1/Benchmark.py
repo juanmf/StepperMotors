@@ -10,6 +10,7 @@ from stepper_motors_juanmf1.ControllerFactory import DynamicControllerFactory
 from stepper_motors_juanmf1.StepperMotor import GenericStepper
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_current_thread_only, flush_current_thread_only
 
+
 class Benchmark:
     """
     By stress testing your motor, with human feedback, find min speed (min speed you feel comfortable with, when motor
@@ -19,7 +20,7 @@ class Benchmark:
     speed, starting at minPPS, and the next speed, to failure. When the user tells the system, the motor failed, search
     shifts to binary search between last known successful speed jump and failed speed jump. Process repeats until maxPPS
     is reached.
-    The output is compatible with :func:`~StepperMotor.TORQUE_CHARACTERISTICS`, used by
+    The output is compatible with :func:`~StepperMotor.TORQUE_CURVE`, used by
     :func:`~CustomAccelerationPerPps` for acceleration profile, squeezing your motor's instantaneous torque to the
     limit. Alternatively, output can be passed to stepperMotors.CustomAccelerationPerPps.transformations in constructor
     overriding StepperMotor values.
@@ -312,7 +313,13 @@ class Benchmark:
         method()
 
     @staticmethod
-    def initBenchmark(stepperMotor, directionPin, stepPin, *, sleepGpioPin=None, minPps=None, maxPps=None, minPpsDelta=None, absoluteMinPps=None):
+    def initBenchmark(stepperMotor, directionPin, stepPin, *,
+                      sleepGpioPin=None,
+                      minPps=None,
+                      maxPps=None,
+                      minPpsDelta=None,
+                      absoluteMinPps=None):
+
         minPpsDelta = minPpsDelta if minPpsDelta is not None else Benchmark.MIN_PPS_DELTA
         absoluteMinPps = absoluteMinPps if absoluteMinPps is not None else Benchmark.ABSOLUTE_MIN_PPS
         controllerFactory = DynamicControllerFactory()
@@ -333,7 +340,11 @@ class Benchmark:
         if len(args) < 2 or not (int(args[0]) < 45 and int(args[1]) < 45):
             raise RuntimeError("Need directionPin, StepPin to init Controller.")
 
-        motor = GenericStepper(maxPps=Benchmark.ABSOLUTE_MIN_PPS, minPps=Benchmark.ABSOLUTE_MIN_PPS)
+        motor = (GenericStepper.Builder()
+                 .withSpr(200)
+                 .withMaxPps(Benchmark.ABSOLUTE_MIN_PPS)
+                 .withMinPps(Benchmark.ABSOLUTE_MIN_PPS)
+                 .build())
         tprint("Benchmarking azimuth Motor")
         Benchmark.initBenchmark(motor, int(args[0]), int(args[1]))
 

@@ -157,7 +157,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         # Contiguous method calls in RPi are about 10uS apart. for a collision here it'd need to be 10K times faster.
         # this job is navigation level. there is a job per driver we need to complete independently.
         navJob = self.work([self.PulsingController(
-                controller, controller.stepperMotor.minSleepTime, targetPosition, fn, interruptPredicate,
+                controller, controller.stepperMotor.getMinSleepTime(), targetPosition, fn, interruptPredicate,
                 eventInAdvanceSteps=eventInAdvanceSteps, eventName=eventName)])
         return controller.currentJob.block
 

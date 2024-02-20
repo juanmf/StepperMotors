@@ -27,7 +27,7 @@ A few distinct concepts have been implemented:
 * `Benchmark`, a stress test module to find your motor's (under current load), min & max speeds, and instantaneous torque 
   characteristics, all in terms of PPS. For instantaneous torque characteristics the output (with format
   `[(minPPS, incrementPPS_1), (minPPS + incrementPPS_1, incrementPPS_2), ..., (maxPPS, 0)]`) can be
-  used as `YourStepperMotorSubClass.TORQUE_CHARACTERISTICS` or as an input to `CustomAccelerationPerPps` acceleration 
+  used as `YourStepperMotorSubClass.TORQUE_CURVE` or as an input to `CustomAccelerationPerPps` acceleration 
   strategy's `transformations` constructor argument. This enables your motor to reach max speed in the least amount of 
   steps possible while keeping synch (useful when speed matters).
   * Currently tested on (see https://www.reddit.com/r/robotics/comments/18ukw4p/benchmarking_stepper_motor/):  
