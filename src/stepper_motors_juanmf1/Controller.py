@@ -132,18 +132,6 @@ class BipolarStepperMotorDriver(MotorDriver):
     Many sites will show 50% duty cycle from controller code. Drivers actually take short signal pulses.
     """
 
-    SIGNED_STEPS_CALLABLES = {}
-    """
-    steps in direction aware functions like :func:`~stepClockWise` and :func:`~stepCounterClockWise` must be positive.
-    To alleviate client code burden, subclasses must define an association between signed steps and CW vs CCW.
-    :func:`~signedSteps` will pick the right callable (lambda to either :func:`~stepClockWise` or 
-    :func:`~stepCounterClockWise`) and send `abs(steps)` to it, consuming sign in the process.
-    see :func:`DRV8825MotorDriver.SIGNED_STEPS_CALLABLES` for an example.
-    Basically it should be 
-    `{-1: lambda _steps, _fn: self.stepCounterClockWise(_steps, _fn),
-      1: lambda _steps, _fn: self.stepClockWise(_steps, _fn)}` or otherwise. 
-    """
-
     PULSE_STATE = None
     """
     Only tested with DRV8825 but LOW pulse is also possible on HIGH background.
@@ -259,7 +247,7 @@ class BipolarStepperMotorDriver(MotorDriver):
 
         if self.modeGpioPins is not None:
             GPIO.setup(self.modeGpioPins, GPIO.OUT)
-            for i in range(3):
+            for i in range(len(self.modeGpioPins)):
                 self.pi.write(self.modeGpioPins[i], self.RESOLUTION[stepsMode][i])
 
     def _oneTimeInit(self):
@@ -290,8 +278,8 @@ class BipolarStepperMotorDriver(MotorDriver):
         self.isRunning = True
 
         if not self.useHoldingTorque:
-            self.setSleepMode(sleepOn=False)
-            self.setEnableMode(enableOn=True)
+            self.sleepGpioPin is not None and self.setSleepMode(sleepOn=False)
+            self.enableGpioPin is not None and self.setEnableMode(enableOn=True)
 
         eventName = jobCompleteEventNamePrefix + self._steppingCompleteEventName
         # Multiprocess event propagation is in the order of 0.003 seconds or ~1 step at 300 PPS.
@@ -303,8 +291,8 @@ class BipolarStepperMotorDriver(MotorDriver):
             return
 
         if not self.useHoldingTorque:
-            self.setSleepMode(sleepOn=True)
-            self.setEnableMode(enableOn=False)
+            self.sleepGpioPin is not None and self.setSleepMode(sleepOn=True)
+            self.enableGpioPin is not None and self.setEnableMode(enableOn=False)
 
         self.isRunning = False
         startTime = self.currentJob.startTime.result()
@@ -365,11 +353,19 @@ class BipolarStepperMotorDriver(MotorDriver):
                                     Your app might wat to perform tasks in preparation for final step.
         @return:
         """
-        call: Callable[[int, Callable, str, int, int], BlockingQueueWorker.Job or None] = (
-            self.SIGNED_STEPS_CALLABLES.get(sign(steps), lambda _steps, _fn, _jobCompleteEventNamePrefix,
-                                            _maxPpsOverride, _eventInAdvanceSteps: None))
-
-        return call(abs(steps), fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps)
+        StepsSign = sign(steps)
+        if StepsSign > 0:
+            self.stepClockWise(abs(steps),
+                               fn=fn,
+                               jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                               maxPpsOverride=maxPpsOverride,
+                               eventInAdvanceSteps=eventInAdvanceSteps)
+        elif StepsSign < 0:
+            self.stepCounterClockWise(abs(steps),
+                                      fn=fn,
+                                      jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                                      maxPpsOverride=maxPpsOverride,
+                                      eventInAdvanceSteps=eventInAdvanceSteps)
 
     def stepClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
                       eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
@@ -401,6 +397,8 @@ class BipolarStepperMotorDriver(MotorDriver):
 
 class DRV8825MotorDriver(BipolarStepperMotorDriver):
     """
+    Current adjustment formula: (I = 2 * vRef)
+
     Tested with SongHe (ghost company?) & HiLetgo (here:http://www.hiletgo.com/ProductDetail/1952516.html) brands for
     DRV8825 board.
     Cheap DRV8825 Stepper Motor Controller IC https://www.rototron.info/wp-content/uploads/PiStepper_DRV8825.pdf
@@ -424,7 +422,7 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
     # Raspberry Pi sleeps (in % of desired time) increasingly longer the lower the time goes.
     # So in actuality this will sleep about 20uS
     PULSE_TIME_MICROS = 20
-    SIGNED_STEPS_CALLABLES = {}
+
     # DRV8825 Uses HIGH pulse on LOW background for STEP signal.
     PULSE_STATE = GPIO.HIGH
 
@@ -482,23 +480,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                          isProxy=isProxy,
                          jobCompletionObserver=jobCompletionObserver)
 
-        self.SIGNED_STEPS_CALLABLES = {
-                -1: lambda steps, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps:
-                        self.stepCounterClockWise(steps,
-                                                  fn=fn,
-                                                  jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
-                                                  maxPpsOverride=maxPpsOverride,
-                                                  eventInAdvanceSteps=eventInAdvanceSteps),
-
-                1: lambda steps, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps:
-                        self.stepClockWise(steps,
-                                           fn=fn,
-                                           jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
-                                           maxPpsOverride=maxPpsOverride,
-                                           eventInAdvanceSteps=eventInAdvanceSteps)
-        }
-
-
     def setSleepMode(self, sleepOn=False):
         """
         Active LOW, so if sleepOn True, pin is LOW. if sleepOn False, pin is HIGH.
@@ -537,3 +518,117 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
 
 # class TB6560(BipolarStepperMotorDriver):
 #     pass
+
+
+class TMC2209MotorDriver(BipolarStepperMotorDriver):
+    """
+    No UART support
+    Current adjustment formula: (vRef = 0.71 * 2 * I = 1.42 * I)
+
+    DRIVER PINOUT: [EN??] & [FLT] unused
+
+    [EN]     1  *   *  9 [VMOT] DANGER, VOLTAGE MOTOR KEEP AWAY FROM RaspberryPi // VMOT bridged with capacitor to GND
+                                [EN] Active LOW but doesn't work disconnected. Need to provide a pin to enableGpioPin
+    [MODE_1] 2  *   * 10 [GND] // MODE_0 -> modeGpioPins[0]
+    [MODE_2] 3  *   * 11 [A2]  // MODE_1 -> modeGpioPins[1]
+    [PDN]    4  *   * 12 [A1]  // A1 & A2 to same coil in motor
+    [PDN]    5  *   * 13 [B1]  // B2 & B1 to same coil in motor
+    [CLK]    6  *   * 14 [B2]
+    [STP]    7  *   * 15 [VDD] // STP -> stepGpioPin in Raspberry
+    [DIR]    8  *   * 16 [GND] // DIR -> directionGpioPin in Raspberry // GND to GND in pi
+
+    https://www.youtube.com/watch?v=VcyGzXIZm58
+    Readings:
+        https://klipper.discourse.group/t/tmc-uart-wiring-and-pin-variations/11391
+        https://forum.arduino.cc/t/tmcstepper-arduino-tmc2209/956036
+
+    Tested on BigTreeTech TMC2209 v1.3 board:
+    BigTreeTechnologies UART (“BTT”) found here:
+        https://www.aliexpress.com/item/1005004656945214.html (Not sure this one is v1.3)
+        https://www.amazon.com/gp/product/B07ZPYKL46
+    4 Microstepping modes, Micro stepping pins:
+        MS1,MS2,Mode
+        0   0   1/8
+        1   0   1/2
+        0   1   1/4
+        1   1   1/16
+
+    """
+
+    CW = GPIO.HIGH  # Clockwise Rotation
+    CCW = GPIO.LOW  # Counterclockwise Rotation
+
+    # Mode pins are static, as they are shared among Turret motors.
+    # TODO: what combo is Full? if 0 0 => 1/8? is it that not connected != LOW as it happens with EN_PIN?
+    # TODO: super uses 3 pins. make compatible.
+    RESOLUTION = {'1/8':  (0, 0),
+                  'Half': (1, 0),
+                  '1/2':  (1, 0),
+                  '1/4':  (0, 1),
+                  '1/16':  (1, 1)}
+
+    # DRV8825 uses min 10 microseconds HIGH for STEP pin.
+    # Raspberry Pi sleeps (in % of desired time) increasingly longer the lower the time goes.
+    # So in actuality this will sleep about 20uS
+    PULSE_TIME_MICROS = 20
+
+    # DRV8825 Uses HIGH pulse on LOW background for STEP signal.
+    PULSE_STATE = GPIO.HIGH
+
+    def __init__(self, *,
+                 stepperMotor: StepperMotor,
+                 accelerationStrategy: AccelerationStrategy,
+                 directionGpioPin,
+                 stepGpioPin,
+                 navigation,
+                 # LOW = sleep mode; HIGH = chip active
+                 stepsMode="Full",
+                 modeGpioPins=None,
+                 # LOW = enabled; HIGH chip disabled
+                 enableGpioPin=None,
+                 jobQueue=None,
+                 sharedMemory=None,
+                 isProxy=False,
+                 steppingCompleteEventName="steppingComplete",
+                 jobCompletionObserver=None):
+        super().__init__(stepperMotor=stepperMotor,
+                         accelerationStrategy=accelerationStrategy,
+                         navigation=navigation,
+                         directionGpioPin=directionGpioPin,
+                         stepGpioPin=stepGpioPin,
+                         enableGpioPin=enableGpioPin,
+                         stepsMode=stepsMode,
+                         modeGpioPins=modeGpioPins,
+                         steppingCompleteEventName=steppingCompleteEventName,
+                         jobQueue=jobQueue,
+                         sharedMemory=sharedMemory,
+                         isProxy=isProxy,
+                         jobCompletionObserver=jobCompletionObserver)
+
+    def setSleepMode(self, sleepOn=False):
+        raise RuntimeError("TMC2209 does not hae a sleep Pin, Use EN_PIN `enableGpioPin`")
+
+    def setEnableMode(self, enableOn=True):
+        """
+        Active LOW, so if enableOn True, pin is LOW. if enableOn False, pin is HIGH.
+        @param enableOn: enable or disable the driver chip.  This pin is particularly useful when implementing an
+        emergency stop or shutdown system. Although some integrated circuits like RPI Hats will use this for sleep.
+        """
+        if self.enableGpioPin is None:
+            return
+        state = GPIO.LOW if enableOn else GPIO.HIGH
+        GPIO.output(self.enableGpioPin, state)
+
+    def pulseStart(self):
+        """
+        In most controllers this would mean set step pint to HIGH
+        @return:
+        """
+        GPIO.output(self.stepGpioPin, GPIO.HIGH)
+
+    def pulseStop(self):
+        """
+        In most controllers this would mean set step pint to LOW
+        @return:
+        """
+        GPIO.output(self.stepGpioPin, GPIO.LOW)
