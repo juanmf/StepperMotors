@@ -355,17 +355,17 @@ class BipolarStepperMotorDriver(MotorDriver):
         """
         StepsSign = sign(steps)
         if StepsSign > 0:
-            self.stepClockWise(abs(steps),
-                               fn=fn,
-                               jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
-                               maxPpsOverride=maxPpsOverride,
-                               eventInAdvanceSteps=eventInAdvanceSteps)
-        elif StepsSign < 0:
-            self.stepCounterClockWise(abs(steps),
+            return self.stepClockWise(abs(steps),
                                       fn=fn,
                                       jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
                                       maxPpsOverride=maxPpsOverride,
                                       eventInAdvanceSteps=eventInAdvanceSteps)
+        elif StepsSign < 0:
+            return self.stepCounterClockWise(abs(steps),
+                                             fn=fn,
+                                             jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                                             maxPpsOverride=maxPpsOverride,
+                                             eventInAdvanceSteps=eventInAdvanceSteps)
 
     def stepClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
                       eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
