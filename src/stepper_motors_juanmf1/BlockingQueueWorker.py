@@ -140,8 +140,6 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
         job = self.jobbify(paramsList, startTime)
         if self.isProxy:
             # Parent process/client side
-            tprint(f"Queueing plain paramList as Proxied: {paramsList} at {time.monotonic_ns()}")
-            tprint(f"adding job {type(paramsList)}")
             flush_current_thread_only()
             if isinstance(paramsList, BlockingQueueWorker.Chain):
                 proxyJob = BlockingQueueWorker.ProxiedChain(job)
@@ -205,7 +203,6 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
             while True:
                 if self.isMultiprocess and not self.isProxy:
                     # forcing prints on child processes
-                    tprint(f"waiting for MultiProcess jobs {self.__jobQueue}")
                     flush_streams_if_not_empty()
                 # Block until movement job is sent our way.
                 job = self.__jobQueue.get(block=True)
@@ -220,7 +217,6 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                 if isinstance(job, BlockingQueueWorker.PoisonPill):
                     job.isSwallowed(True)
                     self.taskDone()
-                    tprint("Worker Finished.")
                     return False
 
                 job.start()
@@ -240,10 +236,6 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
         return True
 
     def _handleChainOfWork(self, job: 'BlockingQueueWorker.Chain'):
-        tprint("BlockingQueueWorker.Chain")
-        tprint("job")
-        tprint(job, job.getNext())
-        tprint("")
         if job.getNext() is not None:
             # consumer thread producing, can't block!
             self.work(job.getNext(), block=False)
@@ -345,9 +337,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
             return self._prev
 
         def startChain(self, startTime: Future = None):
-            print(f"Starting Chain on proxy Side: {self.worker.isProxy}")
             from multiprocess.synchronize import process
-            print(f"{process.current_process().name}: {self.worker}")
             self.workStarted = True
             if startTime:
                 self.rootLink.startTime = startTime
@@ -399,13 +389,11 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
 
     class ProxiedChain(Proxied):
         def __init__(self, chain: 'BlockingQueueWorker.Chain'):
-            tprint(f"Marking ProxiedChain {chain}")
             node = chain.rootLink
             paramList = []
             while node:
                 paramList.append(BlockingQueueWorker.Proxied(node))
                 node = node.getNext()
-            tprint(f"Marking ProxiedChain {paramList}")
             super().__init__(paramList)
 
 
@@ -418,7 +406,7 @@ class SameThreadExecutor:
         try:
             fn(*args, **kwargs)
         except RuntimeError as e:
-            print(f"Executor {self.name}: Task failed with error: {e}", traceback.format_exc())
+            tprint(f"Executor {self.name}: Task failed with error: {e}", traceback.format_exc())
             raise e
 
     def shutdown(self, wait, cancel_futures):
@@ -480,6 +468,7 @@ def killWorkers():
             logging.error(f"Error: Worker {worker} didn't finish.")
             raise e
         if not pill.isSwallowed():
+            # Todo: in single process scenario this always prints for some or all workers. Why?
             tprint(f"Worker died of other causes. {_WORKERS[index]}")
 
 

@@ -123,14 +123,12 @@ class LinearAcceleration(AccelerationStrategy):
         self.currentSleepTimeUs = self.maxSleepTimeUs
 
     def decreaseSleepTime(self, targetSleepTime):
-        # tprint(f"decreaseSleepTime: TargetSleep: {targetSleepTime}; currentSleepTime: {self.currentSleepTimeUs}.")
         nextTime = self.currentSleepTimeUs - self.sleepDeltaUs
         self.currentSleepTimeUs = nextTime if targetSleepTime < nextTime else targetSleepTime
         self.currentPps = self.realDirection * (1_000_000 / self.currentSleepTimeUs)
 
     #
     def increaseSleepTime(self, targetSleepTime):
-        # tprint(f"increaseSleepTime: TargetSleep: {targetSleepTime}; currentSleepTime: {self.currentSleepTimeUs}.")
         nextTime = self.currentSleepTimeUs + self.sleepDeltaUs
         self.currentSleepTimeUs = nextTime if targetSleepTime > nextTime else targetSleepTime
         self.currentPps = self.realDirection * (1_000_000 / self.currentSleepTimeUs)
@@ -167,14 +165,11 @@ class ExponentialAcceleration(AccelerationStrategy):
         while pps > self.minPps:
             pps /= initialIncrementFactor ** (1.01 - (pps / self.maxPps))
             self.stepsToBreakCache = [pps] + self.stepsToBreakCache
-            # tprint(f"nextPps: {pps}")
-        # tprint(f"Simulating ExponentialAcceleration: rampSteps to reach Max PPS: {len(self.stepsToBreakCache)}")
 
         self.rampSteps = len(self.stepsToBreakCache)
         self.initialIncrementFactor = initialIncrementFactor
 
     def decreaseSleepTime(self, targetSleepTime):
-        # tprint(f"decreaseSleepTime: TargetSleep: {targetSleepTime}; currentSleepTime: {self.currentSleepTimeUs}.")
         nextPps = self.currentPps * self.initialIncrementFactor ** (1.01 - (abs(self.currentPps) / self.maxPps))
         if abs(nextPps) > self.maxPps:
             nextPps = sign(self.currentPps) * self.maxPps
@@ -183,7 +178,6 @@ class ExponentialAcceleration(AccelerationStrategy):
         self.currentSleepTimeUs = 1_000_000 / nextPps
 
     def increaseSleepTime(self, targetSleepTime):
-        # tprint(f"increaseSleepTime: TargetSleep: {targetSleepTime}; currentSleepTime: {self.currentSleepTimeUs}.")
         nextPps = self.currentPps / self.initialIncrementFactor ** (1.01 - (abs(self.currentPps) / self.maxPps))
         if abs(nextPps) < self.minPps:
             nextPps = sign(self.currentPps) * self.minPps
@@ -242,7 +236,6 @@ class CustomAccelerationPerPps(AccelerationStrategy):
         :return: linear interpolation if not exact hit, first or last increments if out of range.
         """
         pos = bisect_left(self.transformationsPPS, pps)
-        # tprint(f"pos: {pos}; self.transformations {self.transformations}")
 
         if pos == len(self.transformations):
             pos = pos - 2 if pos > 1 and lookBehind or self.delayPlanner.isSlowingDown() else pos - 1
@@ -250,7 +243,6 @@ class CustomAccelerationPerPps(AccelerationStrategy):
         elif pos == 0:
             return self.transformations[0][1]
         elif self.transformations[pos][0] == pps:
-            # tprint(f"transformations exact match: {pps}")
             # When slowing down, use previous transformation.
             pos = pos - 1 if lookBehind or self.delayPlanner.isSlowingDown() else pos
             return self.transformations[pos][1]
@@ -260,19 +252,15 @@ class CustomAccelerationPerPps(AccelerationStrategy):
         before = self.transformations[pos - 1][1]
         after = self.transformations[pos][1]
         transformation = before + ((after - before) / (afterPps - beforePps)) * (pps - beforePps)
-        # tprint(
-        #     f"pps: {pps}; before: {beforePps}; after: {afterPps}; Interpolation: {pps + transformation}; transformation = {transformation}")
         return transformation
 
     def decreaseSleepTime(self, targetSleepTime):
-        # tprint(f"decreaseSleepTime: TargetSleep: {targetSleepTime}; currentSleepTime: {self.currentSleepTimeUs}.")
         nextPps = abs(self.currentPps) + self.takeClosestSpeedTransformation(abs(self.currentPps))
         nextTime = 1_000_000 / nextPps
         self.currentSleepTimeUs = nextTime if targetSleepTime < nextTime else targetSleepTime
         self.currentPps = round(self.realDirection * 1_000_000 / self.currentSleepTimeUs)
 
     def increaseSleepTime(self, targetSleepTime):
-        # tprint(f"increaseSleepTime: TargetSleep: {targetSleepTime}; currentSleepTime: {self.currentSleepTimeUs}.")
         nextPps = abs(self.currentPps) - self.takeClosestSpeedTransformation(abs(self.currentPps))
         nextTime = 1_000_000 / nextPps
         self.currentSleepTimeUs = nextTime if targetSleepTime > nextTime else targetSleepTime
@@ -391,15 +379,12 @@ class InteractiveAcceleration(AccelerationStrategy):
         return self.willStop
 
     def decreaseSleepTime(self, targetSleepTime):
-        # tprint(f"decreaseSleepTime: pps: {self.currentPps}.")
-        # tprint(f"decreaseSleepTime: TargetSleep: {targetSleepTime}; currentSleepTime: {self.currentSleepTimeUs}.")
         nextPps = abs(self.currentPps) + self.speedDelta
         nextTime = 1_000_000 / nextPps
         self.currentSleepTimeUs = nextTime if targetSleepTime < nextTime else targetSleepTime
         self.currentPps = self.realDirection * 1_000_000 / self.currentSleepTimeUs
 
     def increaseSleepTime(self, targetSleepTime):
-        # tprint(f"increaseSleepTime: TargetSleep: {targetSleepTime}; currentSleepTime: {self.currentSleepTimeUs}.")
         nextPps = abs(self.currentPps) - self.speedDelta
         nextTime = 1_000_000 / nextPps
         self.currentSleepTimeUs = nextTime if targetSleepTime > nextTime else targetSleepTime
@@ -441,11 +426,9 @@ class InteractiveAcceleration(AccelerationStrategy):
         if self.rampTokens > 0:
             self.rampTokens -= 1
             self.decreaseSleepTime(self.minSleepTimeUs)
-            # tprint(f"CurrentPPS: {self.currentPps}")
         elif self.rampTokens < 0:
             self.rampTokens += 1
             self.increaseSleepTime(self.maxSleepTimeUs)
-            # tprint(f"CurrentPPS: {self.currentPps}")
         return currentStep + 1
 
     def done(self, resetDelta=False):
@@ -511,8 +494,6 @@ class StaticDelayPlanner(DelayPlanner):
         self.currentStep = None
 
     def computeDelay(self, currentStep, steps, directionChangeListener=None):
-        # tprint("debug:", currentStep, steps, self.accelerationStrategy.rampSteps,
-        #       type(self.accelerationStrategy).__name__)
         # Smooth (de-)acceleration
         self.currentStep, self.steps = currentStep, steps
         if currentStep == 0:
@@ -563,7 +544,6 @@ class DynamicDelayPlanner(DelayPlanner):
 
         self.currentState = self.currentState.transition(
             currentPosition, targetPosition, self.accelerationStrategy, directionChangeListener)
-        # tprint(f"AccelerationStrategy Current Direction: {self.realDirection}")
 
         self.currentState.effectSpeed(self.accelerationStrategy)
         return currentPosition + self.accelerationStrategy.realDirection
@@ -623,11 +603,9 @@ class DynamicDelayPlanner(DelayPlanner):
 
         def transition(self, currentPosition, targetPosition, accelerationStrategy, directionChangeListener):
             if (currentPosition == targetPosition) or targetPosition is None or currentPosition is None:
-                # tprint("State Rest -> Rest")
                 return self
             accelerationStrategy.realDirection = cmp(targetPosition, currentPosition)
             directionChangeListener(accelerationStrategy.realDirection)
-            tprint("State Rest -> RampingUp")
             out = DynamicDelayPlanner.RampingUp()
             out.fromRest = True
             return out
@@ -646,14 +624,10 @@ class DynamicDelayPlanner(DelayPlanner):
             isRightDir = accelerationStrategy.isRightDirection(currentPosition, targetPosition)
             shouldBreak = accelerationStrategy.shouldBreak(pendingSteps)
             if isRightDir and accelerationStrategy.isMaxSpeed() and not shouldBreak:
-                tprint("State RampingUp -> Steady")
                 return DynamicDelayPlanner.Steady()
             elif not isRightDir or shouldBreak:
                 # Todo: pendingSteps == 0 and pps == minPPS we should be able to stop without rampDown.
-                # tprint(f"State RampingUp -> RampingDown "
-                #       f"# steps: {pendingSteps}; shouldBreak={shouldBreak}; isRightDir: {isRightDir}")
                 return DynamicDelayPlanner.RampingDown()
-            # tprint("State RampingUp -> RampingUp")
             return self
 
         def effectSpeed(self, accelerationStrategy):
@@ -673,18 +647,14 @@ class DynamicDelayPlanner(DelayPlanner):
             pendingSteps = abs(currentPosition - targetPosition)
             isRightDir = accelerationStrategy.isRightDirection(currentPosition, targetPosition)
             if pendingSteps == 0 and accelerationStrategy.canStop():
-                tprint("State RampingDown -> Rest")
                 return DynamicDelayPlanner.Rest()
             elif isRightDir and not accelerationStrategy.shouldBreak(pendingSteps):
-                # tprint("State RampingDown -> RampingUp # Same direction")
                 return DynamicDelayPlanner.RampingUp()
             elif pendingSteps > 0 and not isRightDir and accelerationStrategy.canStop():
                 # Reversal
                 accelerationStrategy.realDirection = cmp(targetPosition, currentPosition)
                 directionChangeListener(accelerationStrategy.realDirection)
-                # tprint("State RampingDown -> RampingUp # Reversal")
                 return DynamicDelayPlanner.RampingUp()
-            # tprint("State RampingDown -> RampingDown")
             return self
 
         def effectSpeed(self, accelerationStrategy):
@@ -700,6 +670,5 @@ class DynamicDelayPlanner(DelayPlanner):
             pendingSteps = abs(currentPosition - targetPosition)
             if (not accelerationStrategy.isRightDirection(currentPosition, targetPosition)
                     or accelerationStrategy.shouldBreak(pendingSteps)):
-                # tprint("State Steady -> RampingDown")
                 return DynamicDelayPlanner.RampingDown()
             return self

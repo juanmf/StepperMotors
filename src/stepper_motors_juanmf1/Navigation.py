@@ -12,6 +12,8 @@ from stepper_motors_juanmf1.EventDispatcher import EventDispatcher
 from stepper_motors_juanmf1.SortedDict import SortedDict
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
+from stepper_motors_juanmf1.ThreadOrderedPrint import flush_current_thread_only
+
 
 class Navigation:
     _COMPLETED_FUTURE = None  # Class variable
@@ -37,7 +39,6 @@ class Navigation:
 
     @staticmethod
     def pulseController(controller: MotorDriver):
-        # tprint(f"Setting step pin {controller.stepGpioPin} HIGH.")
         controller.pulseStart()
         controller.usleep(controller.PULSE_TIME_MICROS)
         controller.pulseStop()
@@ -91,7 +92,6 @@ class DynamicNavigation(Navigation):
         # Can cross targetPosition with some speed > 0, that's not a final state.
         while not (controller.getCurrentPosition() == targetPosition and accelerationStrategy.canStop()):
             if interruptPredicate():
-                tprint("Interrupting stepping job.")
                 return
             # Direction is set in position based acceleration' state machine.
             controller.setCurrentPosition(accelerationStrategy.computeSleepTimeUs(
@@ -200,8 +200,9 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                 duePulses.clear()
 
         except Exception as e:
-            print(f"SOMETHING WRONG {e}")
-            print(traceback.format_exc())
+            tprint(f"SOMETHING WRONG {e}")
+            tprint(traceback.format_exc())
+            flush_current_thread_only()
 
     def putPulsingController(self, nextPulse, pulsingController):
         """
@@ -261,7 +262,6 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
             pulsingController.controller.currentJob.block.set_result(True)
             controllerIsDone = True
         elif pulsingController.interruptPredicate():
-            tprint(f"Interrupting stepping job for {pulsingController.controller.workerName}.")
             pulsingController.controller.currentJob.block.set_result(True)
             controllerIsDone = True
         return controllerIsDone

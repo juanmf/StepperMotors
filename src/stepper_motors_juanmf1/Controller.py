@@ -290,7 +290,6 @@ class BipolarStepperMotorDriver(MotorDriver):
         self.isRunning = True
 
         if not self.useHoldingTorque:
-            tprint(f"Waking! Calling setSleepMode with sleepOn=False")
             self.setSleepMode(sleepOn=False)
             self.setEnableMode(enableOn=True)
 
@@ -388,7 +387,6 @@ class BipolarStepperMotorDriver(MotorDriver):
         # Todo: update sharedMemory
         # Translating potential negative values to GPIO.LOW
         directionState = GPIO.HIGH if directionState == GPIO.HIGH else GPIO.LOW
-        tprint(f"Setting direction pin {self.directionGpioPin} {directionState}.")
         GPIO.output(self.directionGpioPin, directionState)
         self.currentDirection = directionState
 
@@ -500,8 +498,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                                            eventInAdvanceSteps=eventInAdvanceSteps)
         }
 
-        tprint(f"sleepPin: {self.sleepGpioPin}.")
-        tprint(f"useHOldingToruqe: {self.useHoldingTorque}")
 
     def setSleepMode(self, sleepOn=False):
         """
@@ -512,7 +508,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         if self.sleepGpioPin is None:
             return
         state = GPIO.LOW if sleepOn else GPIO.HIGH
-        tprint(f"Setting Sleep pin {self.sleepGpioPin} to {state}")
         GPIO.output(self.sleepGpioPin, state)
 
     def setEnableMode(self, enableOn=True):
@@ -524,7 +519,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         if self.enableGpioPin is None:
             return
         state = GPIO.LOW if enableOn else GPIO.HIGH
-        tprint(f"Setting Enabled pin {self.enableGpioPin} to {state}")
         GPIO.output(self.enableGpioPin, state)
 
     def pulseStart(self):
@@ -532,7 +526,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         In most controllers this would mean set step pint to HIGH
         @return:
         """
-        # tprint(f"Setting step pin {controller.stepGpioPin} HIGH.")
         GPIO.output(self.stepGpioPin, GPIO.HIGH)
 
     def pulseStop(self):

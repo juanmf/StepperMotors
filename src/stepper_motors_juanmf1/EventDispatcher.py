@@ -52,17 +52,18 @@ class EventDispatcher(BlockingQueueWorker):
             self.events.setdefault(eName, {})
             cId = uuid.uuid4()
             cIds.append(cId)
-            tprint(f"Register eventName {eName}; calleeId {cId}, oneTimeHandler {oneTimeHandler}")
             if oneTimeHandler:
                 self.events[eName][cId] = lambda calleeId, eventInfo: (
                     self._callThenUnregister(calleeId, eventInfo, callee))
             else:
+                # Todo: add prints in DEBUG level. This print normally happens seldom, but one could abuse
+                #  oneTimeHandler feature
+                tprint(f"Register eventName {eName}; calleeId {cId}")
                 self.events[eName][cId] = callee
 
         return cIds[0] if len(cIds) == 1 else cIds
 
     def unregister(self, calleeId):
-        tprint(f"Unregister calleeId {calleeId}")
         for event_dict in self.events.values():
             if calleeId in event_dict:
                 del event_dict[calleeId]
@@ -76,8 +77,10 @@ class EventDispatcher(BlockingQueueWorker):
 
     def _dispatchMainLoop(self, eventName, eventInfo):
         # Todo: should I add eventId to callee parameters?
-        tprint("dispatchMainLoop", f"eventName: {eventName}, eventInfo: {eventInfo}")
         if eventName not in self.events:
+            # Todo: assess how much this print bothers in normal operation. Normally client app manages its events.
+            #   But operateStepper shuts 2 events per job regardless. Might be a good case for making Stepper events
+            #   optional.
             tprint(f"Missed event {eventName}")
             return
 

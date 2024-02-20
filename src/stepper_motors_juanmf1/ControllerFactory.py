@@ -231,7 +231,6 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                     steppingCompleteEventName=steppingCompleteEventName,
                                     jobCompletionObserver=jobCompletionObserver)
 
-        print(f"driver is proxy? {isProxy} {driver} {driver.getJobQueue()}")
         return driver
 
     def getMpLinearDRV8825With(self, queue, sharedMemory, isProxy, jobCompletionObserver,
@@ -304,7 +303,6 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
             @param sharedMemory:
             @return:
             """
-            print(f"Unpacking in child process!! {self.factoryOrders} {self.queues} {self.sharedMemories}")
             # Removing Singletons instances in case its state was cloned from Parent Process:
             EventDispatcher._instance = None
             BasicSynchronizedNavigation._instance = None
