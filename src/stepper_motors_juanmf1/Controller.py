@@ -25,6 +25,9 @@ class DriverSharedPositionStruct(ctypes.Structure):
 
 # Todo: migrate to https://pypi.org/project/python-periphery/
 class MotorDriver(BlockingQueueWorker):
+    """
+    Unipolar drivers not implemented, e.g. ULN2003 not supported.
+    """
     INSTANCES_COUNT = 0
     PULSE_TIME_MICROS = None
 
@@ -127,6 +130,17 @@ class BipolarStepperMotorDriver(MotorDriver):
     # Mode pins are static, as they are shared among Turret motors.
     RESOLUTION = None
 
+    RESOLUTION_MULTIPLE = {'Full':  1,
+                           'Half':  1 / 2,
+                           '1/2':   1 / 2,
+                           '1/4':   1 / 4,
+                           '1/8':   1 / 8,
+                           '1/16':  1 / 16,
+                           '1/32':  1 / 32,
+                           '1/64':  1 / 64,
+                           '1/128': 1 / 128,
+                           '1/256': 1 / 256}
+
     PULSE_TIME_MICROS = None
     """
     Many sites will show 50% duty cycle from controller code. Drivers actually take short signal pulses.
@@ -211,7 +225,11 @@ class BipolarStepperMotorDriver(MotorDriver):
         # or by fixed number of steps (StaticNavigation, uninterruptible).
         self.navigation = navigation
         self.navigation.setDriverPulseTimeNs(driverPulseTimeUs=self.PULSE_TIME_MICROS)
+        # Counts pulses, Clockwise adds, counterclockwise subtracts.
         self.currentPosition = 0
+        # Corrects self.currentPosition for stepping mode.
+        self.actualCurrentPosition = 0
+        self.steppingModeMultiple = self.RESOLUTION_MULTIPLE[stepsMode]
         self.currentDirection = None
 
         self.isRunning = False
@@ -249,6 +267,7 @@ class BipolarStepperMotorDriver(MotorDriver):
             GPIO.setup(self.modeGpioPins, GPIO.OUT)
             for i in range(len(self.modeGpioPins)):
                 self.pi.write(self.modeGpioPins[i], self.RESOLUTION[stepsMode][i])
+            self.steppingModeMultiple = self.RESOLUTION_MULTIPLE[stepsMode]
 
     def _oneTimeInit(self):
         with self.LOCK:
@@ -260,17 +279,21 @@ class BipolarStepperMotorDriver(MotorDriver):
 
     def _doOperateStepper(self, direction, steps, fn=None, jobCompleteEventNamePrefix="", eventInAdvanceSteps=10):
         """
-                Positive change in position is in clockwise direction, negative is counter clock wise.
-                callable signature is expected as fn(currentPosition, targetPosition, realDirection)
-                (realDirection from AccelerationStrategy)
-                interruptibility is determined by Navigation instance injected at construction time.
-                :param direction: self.CW or self.CCW
-                :param steps: Number of steps, as we rely on direction, an error is raised if negative values are sent.
-                # Todo: client knows targetPosition, would only need currentPosition and realDirection, but not every step.
-                :param fn: callable to execute after each step. Contract:
-                    fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection)
-                    Note it does not work with lambdas on multiprocess!
-                """
+        Positive change in position is in clockwise direction, negative is counter clock wise.
+        callable signature is expected as fn(currentPosition, targetPosition, realDirection)
+        (realDirection from AccelerationStrategy)
+        interruptibility is determined by Navigation instance injected at construction time.
+        :param direction: self.CW or self.CCW
+        :param steps: Number of steps, as we rely on direction, an error is raised if negative values are sent.
+                      steps is Actual Pulses, i.e. in micro stepping 1/8, steps = 8 would move the stepper motor 1
+                      actual step. use self.steppingModeMultiple to correct for microstepping mode:
+                          intendedMotorSteps = steps / self.steppingModeMultiple
+                          actualSteps        = steps * self.steppingModeMultiple
+        # Todo: client knows targetPosition, would only need currentPosition and realDirection, but not every step.
+        :param fn: callable to execute after each step. Contract:
+            fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection)
+            Note it does not work with lambdas on multiprocess!
+        """
         if steps < 0:
             raise RuntimeError("Can't handle negative steps. Use direction (self.CW or self.CCW) & steps > 0 properly.")
         signedDirection = 1 if direction == self.CW else -1
@@ -312,6 +335,10 @@ class BipolarStepperMotorDriver(MotorDriver):
         else:
             self._doOperateStepper(direction, steps, fn, jobCompleteEventNamePrefix,eventInAdvanceSteps)
 
+    def getActualCurrentPosition(self):
+        self.actualCurrentPosition = self.steppingModeMultiple * self.getCurrentPosition()
+        return self.actualCurrentPosition
+
     def setCurrentPosition(self, position):
         if self.isProxy:
             # Enable proxy (MainProcess counterpart of childProcess driver) to reset position only when not running.
@@ -338,10 +365,53 @@ class BipolarStepperMotorDriver(MotorDriver):
     def isInterrupted(self):
         return self.hasQueuedJobs()
 
+    def signedMicroSteps(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
+                         eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+        """
+        Accounts for current micro-stepping mode. Steps is the the actual, real, motor steps to run for.
+        this is equivalent to signedSteps() only in Full step mode.
+        @param steps: REAL motor steps number
+        @return: a BlockingQueueWorker.Job representing this stepping job.
+        """
+        return self.signedSteps(int(steps / self.steppingModeMultiple),
+                                fn=fn,
+                                jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                                maxPpsOverride=maxPpsOverride,
+                                eventInAdvanceSteps=eventInAdvanceSteps)
+
+    def microStepClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
+                           eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+        """
+        Accounts for current micro-stepping mode. Steps is the the actual, real, motor steps to run for.
+        this is equivalent to stepClockWise() only in Full step mode.
+        @param steps: REAL motor steps number
+        @return: a BlockingQueueWorker.Job representing this stepping job.
+        """
+        return self.stepClockWise(int(steps / self.steppingModeMultiple),
+                                  fn=fn,
+                                  jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                                  maxPpsOverride=maxPpsOverride,
+                                  eventInAdvanceSteps=eventInAdvanceSteps)
+
+    def microStepCounterClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
+                                  eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+        """
+        Accounts for current micro-stepping mode. Steps is the the actual, real, motor steps to run for.
+        this is equivalent to stepCounterClockWise() only in Full step mode.
+        @param steps: REAL motor steps number
+        @return: a BlockingQueueWorker.Job representing this stepping job.
+        """
+        return self.stepCounterClockWise(int(steps / self.steppingModeMultiple),
+                                         fn=fn,
+                                         jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                                         maxPpsOverride=maxPpsOverride,
+                                         eventInAdvanceSteps=eventInAdvanceSteps)
+
     def signedSteps(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
                     eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
         """
-        _operateStepper
+        Creates stepping jobs handled by self._operateStepper.
+        Here Steps = Pulses, matchong actual motor steps ONLY IN FULL STEP MODE. see signedMicroSteps()
         @param steps: signed steps, -100 is 100 steps counterclockwise, 100 is 100 steps clockwise.
         @param fn: Stepping callback. Will be called on each step with contract:
                    fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection,
@@ -351,7 +421,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         @param maxPpsOverride: Allows for motor to run at a speed different from StepperMotor.getMaxPps(), ideally lower
         @param eventInAdvanceSteps: How many steps before done should "<prefix>steppingCompleteAdvance" be published.
                                     Your app might wat to perform tasks in preparation for final step.
-        @return:
+        @return: a BlockingQueueWorker.Job representing this stepping job.
         """
         StepsSign = sign(steps)
         if StepsSign > 0:
@@ -369,12 +439,22 @@ class BipolarStepperMotorDriver(MotorDriver):
 
     def stepClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
                       eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+        """
+        See signedSteps()
+        1 step = 1 pulse, does not correct for microStepping. See microStepClockWise()
+        @return: a BlockingQueueWorker.Job representing this stepping job.
+        """
         return self.work(
             paramsList=[self.CW, steps, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps],
             block=True)
 
     def stepCounterClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
                              eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+        """
+        See signedSteps()
+        1 step = 1 pulse, does not correct for microStepping. See microStepCounterClockWise()
+        @return: a BlockingQueueWorker.Job representing this stepping job.
+        """
         return self.work(
             paramsList=[self.CCW, steps, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps],
             block=True)
@@ -417,6 +497,7 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                   '1/8': (1, 1, 0),
                   '1/16': (0, 0, 1),
                   '1/32': (1, 0, 1)}
+
 
     # DRV8825 uses min 10 microseconds HIGH for STEP pin.
     # Raspberry Pi sleeps (in % of desired time) increasingly longer the lower the time goes.
@@ -520,17 +601,23 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
 #     pass
 
 
-class TMC2209MotorDriver(BipolarStepperMotorDriver):
+class TMC2209StandaloneMotorDriver(BipolarStepperMotorDriver):
     """
+    When a GPIO pin is set to LOW, it typically sinks current, effectively providing a path to ground. That's why EN_PIN
+    which is active LOW needs to be connected to GPIO or to GND.
     Should work with drop-in replacements as well:
     TMC2208 / TMC2209 / TMC2226
     No UART support
-    Current adjustment formula: (vRef = 0.71 * 2 * I = 1.42 * I)
+    Current adjustment formula: (I(rms) = Vref/sqrt(2))
+    Peak Current: I(peak) = I(rms)/sqrt(2) = Vref
+    Vref range：0.2V – 2.2V
+    Factory default Vref(same as Peak Current): 1.2V ±0.1V
+    Factory default RMS current：~0.9A
 
     DRIVER PINOUT: [EN??] & [FLT] unused
 
-    [EN]     1  *   *  9 [VMOT] DANGER, VOLTAGE MOTOR KEEP AWAY FROM RaspberryPi // VMOT bridged with capacitor to GND
-                                [EN] Active LOW but doesn't work disconnected. Need to provide a pin to enableGpioPin
+    [EN]     1  *   *  9 [VMOT] [EN] Active LOW.
+                                DANGER, VOLTAGE MOTOR KEEP AWAY FROM RaspberryPi // VMOT bridged with capacitor to GND
     [MODE_1] 2  *   * 10 [GND] // MODE_0 -> modeGpioPins[0]
     [MODE_2] 3  *   * 11 [A2]  // MODE_1 -> modeGpioPins[1]
     [PDN]    4  *   * 12 [A1]  // A1 & A2 to same coil in motor
@@ -541,19 +628,31 @@ class TMC2209MotorDriver(BipolarStepperMotorDriver):
 
     https://www.youtube.com/watch?v=VcyGzXIZm58
     Readings:
+        https://bttwiki.com/TMC2209.html#trinamic-driver-current-formula
         https://klipper.discourse.group/t/tmc-uart-wiring-and-pin-variations/11391
         https://forum.arduino.cc/t/tmcstepper-arduino-tmc2209/956036
+        https://www.digikey.cz/htmldatasheets/production/2042923/0/0/1/mikroe-2624.html#pf3c
+        [Not Supported]:
+            UART https://forum.arduino.cc/t/using-a-tmc2209-silent-stepper-motor-driver-with-an-arduino/666992/104?page=6
+            https://www.elinux.org/Serial_port_programming
 
     Tested on BigTreeTech TMC2209 v1.3 board:
     BigTreeTechnologies UART (“BTT”) found here:
         https://www.aliexpress.com/item/1005004656945214.html (Not sure this one is v1.3)
         https://www.amazon.com/gp/product/B07ZPYKL46
-    4 Microstepping modes, Micro stepping pins:
-        MS1,MS2,Mode
-        0   0   1/8
-        1   0   1/2
-        0   1   1/4
-        1   1   1/16
+
+    https://learn.watterott.com/silentstepstick/pinconfig/tmc2209/#step-configuration
+    4 Microstepping modes, in either of stealthChop, spreadCycle (more torque at high speed).
+    Micro stepping pins:
+        MS1,MS2,SPREAD/MS3, StepMode, Mode
+        0   0   0            1/8        stealthChop
+        1   0   0            1/2        stealthChop
+        0   1   0            1/4        stealthChop
+        1   1   0            1/16       stealthChop
+        0   0   1            1/8        spreadCycle
+        1   0   1            1/2        spreadCycle
+        0   1   1            1/4        spreadCycle
+        1   1   1            1/16       spreadCycle
 
     """
 
@@ -564,9 +663,8 @@ class TMC2209MotorDriver(BipolarStepperMotorDriver):
     # TODO: what combo is Full? if 0 0 => 1/8? is it that not connected != LOW as it happens with EN_PIN?
     # TODO: super uses 3 pins. make compatible.
     RESOLUTION = {'1/8':  (0, 0),
-                  'Half': (1, 0),
-                  '1/2':  (1, 0),
-                  '1/4':  (0, 1),
+                  '1/32':  (1, 0),
+                  '1/64':  (0, 1),
                   '1/16':  (1, 1)}
 
     # DRV8825 uses min 10 microseconds HIGH for STEP pin.
@@ -577,6 +675,9 @@ class TMC2209MotorDriver(BipolarStepperMotorDriver):
     # DRV8825 Uses HIGH pulse on LOW background for STEP signal.
     PULSE_STATE = GPIO.HIGH
 
+    CHOP_MODE_STEALTH = GPIO.LOW
+    CHOP_MODE_SPREAD_CYCLE = GPIO.HIGH
+
     def __init__(self, *,
                  stepperMotor: StepperMotor,
                  accelerationStrategy: AccelerationStrategy,
@@ -584,8 +685,16 @@ class TMC2209MotorDriver(BipolarStepperMotorDriver):
                  stepGpioPin,
                  navigation,
                  # LOW = sleep mode; HIGH = chip active
-                 stepsMode="Full",
+                 stepsMode="1/8",
                  modeGpioPins=None,
+                 spreadGpioPin=None,
+                 diagGPIOPin=None,
+                 autoResetOnError=False,
+                 homeDirection=-1,
+                 indexGPIOPin=None,
+                 # Vref range：0.2V – 2.2V
+                 vRefAnalogPin=None,
+                 stepsPerIndexPulse=4,
                  # LOW = enabled; HIGH chip disabled
                  enableGpioPin=None,
                  jobQueue=None,
@@ -606,6 +715,99 @@ class TMC2209MotorDriver(BipolarStepperMotorDriver):
                          sharedMemory=sharedMemory,
                          isProxy=isProxy,
                          jobCompletionObserver=jobCompletionObserver)
+
+        self.spreadGpioPin = spreadGpioPin
+
+        # Not so Soon: https://swharden.com/blog/2016-09-28-generating-analog-voltages-with-the-raspberry-pi/
+        # https://www.youtube.com/watch?v=iwzXh2V1SP4&t=20s
+        self.vRefAnalogPin = vRefAnalogPin
+
+        # Inputs
+        # Diagnostic and StallGuard output. High level upon stall detection or driver error. Reset error condition by
+        # ENN=high.
+        self.diagGPIOPin = diagGPIOPin
+        self.isInErrorState = False
+        self.autoResetOnError = autoResetOnError
+        self.homeDirection = homeDirection
+
+        # Configurable index output. Provides index pulse. one pulse each 4 Full steps by default.
+        self.indexGPIOPin = indexGPIOPin
+        self.indexReportedPosition = 0
+        self.stepsPerIndexPulse = stepsPerIndexPulse
+
+        self.init()
+
+    def init(self):
+        if self.spreadGpioPin:
+            GPIO.setup(self.spreadGpioPin, GPIO.OUT)
+            self.setChopper(self.CHOP_MODE_STEALTH)
+
+
+        if self.diagGPIOPin:
+            GPIO.setup(self.diagGPIOPin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+            GPIO.add_event_detect(self.diagGPIOPin,
+                                  GPIO.FALLING,
+                                  callback=self.readDiagnosticPin,
+                                  bouncetime=30)
+        if self.indexGPIOPin:
+            GPIO.setup(self.indexGPIOPin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+            GPIO.add_event_detect(self.indexGPIOPin,
+                                  GPIO.FALLING,
+                                  callback=self.readIndexPin,
+                                  bouncetime=30)
+
+        # Default to stealthChop
+
+    def readDiagnosticPin(self):
+        """
+        Chip error Or (most likely stall detected, Assuming homing when resetErrorState() set position to zero.)
+        @return:
+        """
+        self.isInErrorState = True
+        tprint(f"{self.workerName} Reported error or Stalling!")
+        if self.autoResetOnError and self.currentDirection == self.homeDirection:
+            # Vague attempt at sensorless-homing.
+            self.resetErrorState()
+
+    def resetErrorState(self):
+        direction = self.homeDirection
+        steps = 1
+        fn = None
+        jobCompleteEventNamePrefix = "ResettingErrorState"
+        job = self.work([direction, steps, fn, jobCompleteEventNamePrefix])
+        tprint(f"Sensorless homing {self.workerName}")
+
+        # Block until done.
+        job.result()
+        self.isInErrorState = False
+        self.indexReportedPosition = 0
+        self.currentPosition = 0
+        self.toggleEnabled()
+
+    def toggleEnabled(self):
+        # EN is active LOW
+        # This should reset index internal count too.
+        GPIO.output(self.enableGpioPin, GPIO.HIGH)
+        time.sleep(0.01)
+        GPIO.output(self.enableGpioPin, GPIO.LOW)
+
+    def readIndexPin(self):
+        self.indexReportedPosition += int(self.currentDirection * self.stepsPerIndexPulse)
+
+    def setPeakCurrent(self, current):
+        assert current < 2.2 and current > 0.2
+        # https://swharden.com/blog/2016-09-28-generating-analog-voltages-with-the-raspberry-pi/
+        pass
+
+    def setRmsCurrent(self, current):
+        # Theoretical max: 2.2 / math.sqrt(2) => 1.5556349186104046
+        assert current < 1.551 and current > 0.2
+        # https://swharden.com/blog/2016-09-28-generating-analog-voltages-with-the-raspberry-pi/
+        pass
+
+    def setChopper(self, state):
+        assert self.spreadGpioPin and state in (self.CHOP_MODE_STEALTH, self.CHOP_MODE_SPREAD_CYCLE)
+        GPIO.output(self.spreadGpioPin, state)
 
     def setSleepMode(self, sleepOn=False):
         raise RuntimeError("TMC2209 does not hae a sleep Pin, Use EN_PIN `enableGpioPin`")
@@ -634,3 +836,13 @@ class TMC2209MotorDriver(BipolarStepperMotorDriver):
         @return:
         """
         GPIO.output(self.stepGpioPin, GPIO.LOW)
+
+    def _operateStepper(self, direction, steps, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
+                        eventInAdvanceSteps=10):
+        super()._operateStepper(direction, steps, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps)
+        self.checkPositionVsIndexReportedPosition()
+
+    def checkPositionVsIndexReportedPosition(self):
+        if self.indexGPIOPin and abs(self.currentPosition - self.indexReportedPosition) > 3:
+            # Todo: This will fail unless we correct by microsteps as currentPosition counts int regardless of mode
+            raise RuntimeError("Lost track of position, chip index and currentPosition dicerged")

@@ -8,7 +8,8 @@ from stepper_motors_juanmf1.AccelerationStrategy import (LinearAcceleration, Acc
                                                          CustomAccelerationPerPps, DynamicDelayPlanner,
                                                          StaticDelayPlanner,
                                                          InteractiveAcceleration, DelayPlanner)
-from stepper_motors_juanmf1.Controller import DRV8825MotorDriver, TMC2209MotorDriver, DriverSharedPositionStruct, MotorDriver
+from stepper_motors_juanmf1.Controller import (DRV8825MotorDriver, TMC2209StandaloneMotorDriver,
+                                               DriverSharedPositionStruct, MotorDriver)
 from stepper_motors_juanmf1.Navigation import (DynamicNavigation, StaticNavigation, Navigation,
                                                BasicSynchronizedNavigation)
 
@@ -112,84 +113,84 @@ class ControllerFactory:
                                   enableGpioPin=enableGpioPin)
 
     def getFlatTCM2209With(self, stepperMotor, directionPin, stepPin,
-                           stepsMode="Full",
+                           stepsMode="1/8",
                            modeGpioPins=None,
                            enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = AccelerationStrategy(stepperMotor, delayPlanner)
-        return TMC2209MotorDriver(stepperMotor=stepperMotor,
-                                  accelerationStrategy=acceleration,
-                                  directionGpioPin=directionPin,
-                                  stepGpioPin=stepPin,
-                                  navigation=navigation,
-                                  stepsMode=stepsMode,
-                                  modeGpioPins=modeGpioPins,
-                                  enableGpioPin=enableGpioPin)
+        return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
+                                            accelerationStrategy=acceleration,
+                                            directionGpioPin=directionPin,
+                                            stepGpioPin=stepPin,
+                                            navigation=navigation,
+                                            stepsMode=stepsMode,
+                                            modeGpioPins=modeGpioPins,
+                                            enableGpioPin=enableGpioPin)
 
     def getLinearTCM2209With(self, stepperMotor, directionPin, stepPin,
-                             stepsMode="Full",
+                             stepsMode="1/8",
                              modeGpioPins=None,
                              enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = LinearAcceleration(stepperMotor, delayPlanner)
-        return TMC2209MotorDriver(stepperMotor=stepperMotor,
-                                  accelerationStrategy=acceleration,
-                                  directionGpioPin=directionPin,
-                                  stepGpioPin=stepPin,
-                                  navigation=navigation,
-                                  stepsMode=stepsMode,
-                                  modeGpioPins=modeGpioPins,
-                                  enableGpioPin=enableGpioPin)
+        return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
+                                            accelerationStrategy=acceleration,
+                                            directionGpioPin=directionPin,
+                                            stepGpioPin=stepPin,
+                                            navigation=navigation,
+                                            stepsMode=stepsMode,
+                                            modeGpioPins=modeGpioPins,
+                                            enableGpioPin=enableGpioPin)
 
     def getExponentialTCM2209With(self, stepperMotor, directionPin, stepPin,
-                                  stepsMode="Full",
+                                  stepsMode="1/8",
                                   modeGpioPins=None,
                                   enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
-        return TMC2209MotorDriver(stepperMotor=stepperMotor,
-                                  accelerationStrategy=acceleration,
-                                  directionGpioPin=directionPin,
-                                  stepGpioPin=stepPin,
-                                  navigation=navigation,
-                                  stepsMode=stepsMode,
-                                  modeGpioPins=modeGpioPins,
-                                  enableGpioPin=enableGpioPin)
+        return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
+                                            accelerationStrategy=acceleration,
+                                            directionGpioPin=directionPin,
+                                            stepGpioPin=stepPin,
+                                            navigation=navigation,
+                                            stepsMode=stepsMode,
+                                            modeGpioPins=modeGpioPins,
+                                            enableGpioPin=enableGpioPin)
 
     def getCustomTorqueCharacteristicsTCM2209With(self, stepperMotor, directionPin, stepPin, transformations=None,
-                                                  stepsMode="Full",
+                                                  stepsMode="1/8",
                                                   modeGpioPins=None,
                                                   enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = CustomAccelerationPerPps(stepperMotor, delayPlanner, transformations=transformations)
-        return TMC2209MotorDriver(stepperMotor=stepperMotor,
-                                  accelerationStrategy=acceleration,
-                                  directionGpioPin=directionPin,
-                                  stepGpioPin=stepPin,
-                                  navigation=navigation,
-                                  stepsMode=stepsMode,
-                                  modeGpioPins=modeGpioPins,
-                                  enableGpioPin=enableGpioPin)
+        return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
+                                            accelerationStrategy=acceleration,
+                                            directionGpioPin=directionPin,
+                                            stepGpioPin=stepPin,
+                                            navigation=navigation,
+                                            stepsMode=stepsMode,
+                                            modeGpioPins=modeGpioPins,
+                                            enableGpioPin=enableGpioPin)
 
     def getInteractiveTCM2209With(self, stepperMotor, directionPin, stepPin, minSpeedDelta, minPps,
-                                  stepsMode="Full",
+                                  stepsMode="1/8",
                                   modeGpioPins=None,
                                   enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = InteractiveAcceleration(stepperMotor, delayPlanner, minSpeedDelta, minPps)
-        return TMC2209MotorDriver(stepperMotor=stepperMotor,
-                                  accelerationStrategy=acceleration,
-                                  directionGpioPin=directionPin,
-                                  stepGpioPin=stepPin,
-                                  navigation=navigation,
-                                  stepsMode=stepsMode,
-                                  modeGpioPins=modeGpioPins,
-                                  enableGpioPin=enableGpioPin)
+        return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
+                                            accelerationStrategy=acceleration,
+                                            directionGpioPin=directionPin,
+                                            stepGpioPin=stepPin,
+                                            navigation=navigation,
+                                            stepsMode=stepsMode,
+                                            modeGpioPins=modeGpioPins,
+                                            enableGpioPin=enableGpioPin)
 
 
 class StaticControllerFactory(ControllerFactory):
@@ -372,7 +373,7 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                                     directionPin,
                                                     stepPin,
                                                     transformations=None,
-                                                    stepsMode="Full",
+                                                    stepsMode="1/8",
                                                     modeGpioPins=None,
                                                     enableGpioPin=None,
                                                     steppingCompleteEventName="steppingComplete"):
@@ -381,19 +382,19 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         navigation = self.getNavigation()
         acceleration = CustomAccelerationPerPps(stepperMotor, delayPlanner, transformations=transformations)
 
-        driver = TMC2209MotorDriver(stepperMotor=stepperMotor,
-                                    accelerationStrategy=acceleration,
-                                    directionGpioPin=directionPin,
-                                    stepGpioPin=stepPin,
-                                    navigation=navigation,
-                                    stepsMode=stepsMode,
-                                    modeGpioPins=modeGpioPins,
-                                    enableGpioPin=enableGpioPin,
-                                    jobQueue=queue,
-                                    sharedMemory=sharedMemory,
-                                    isProxy=isProxy,
-                                    steppingCompleteEventName=steppingCompleteEventName,
-                                    jobCompletionObserver=jobCompletionObserver)
+        driver = TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
+                                              accelerationStrategy=acceleration,
+                                              directionGpioPin=directionPin,
+                                              stepGpioPin=stepPin,
+                                              navigation=navigation,
+                                              stepsMode=stepsMode,
+                                              modeGpioPins=modeGpioPins,
+                                              enableGpioPin=enableGpioPin,
+                                              jobQueue=queue,
+                                              sharedMemory=sharedMemory,
+                                              isProxy=isProxy,
+                                              steppingCompleteEventName=steppingCompleteEventName,
+                                              jobCompletionObserver=jobCompletionObserver)
 
         return driver
 
@@ -401,51 +402,51 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                stepperMotor,
                                directionPin,
                                stepPin,
-                               stepsMode="Full",
+                               stepsMode="1/8",
                                modeGpioPins=None,
                                enableGpioPin=None,
                                steppingCompleteEventName="steppingComplete"):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = LinearAcceleration(stepperMotor, delayPlanner)
-        return TMC2209MotorDriver(stepperMotor=stepperMotor,
-                                  accelerationStrategy=acceleration,
-                                  directionGpioPin=directionPin,
-                                  stepGpioPin=stepPin,
-                                  navigation=navigation,
-                                  stepsMode=stepsMode,
-                                  modeGpioPins=modeGpioPins,
-                                  enableGpioPin=enableGpioPin,
-                                  jobQueue=queue,
-                                  sharedMemory=sharedMemory,
-                                  isProxy=isProxy,
-                                  steppingCompleteEventName=steppingCompleteEventName,
-                                  jobCompletionObserver=jobCompletionObserver)
+        return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
+                                            accelerationStrategy=acceleration,
+                                            directionGpioPin=directionPin,
+                                            stepGpioPin=stepPin,
+                                            navigation=navigation,
+                                            stepsMode=stepsMode,
+                                            modeGpioPins=modeGpioPins,
+                                            enableGpioPin=enableGpioPin,
+                                            jobQueue=queue,
+                                            sharedMemory=sharedMemory,
+                                            isProxy=isProxy,
+                                            steppingCompleteEventName=steppingCompleteEventName,
+                                            jobCompletionObserver=jobCompletionObserver)
 
     def getMpExponentialTMC2209With(self, queue, sharedMemory, isProxy, jobCompletionObserver,
                                     stepperMotor,
                                     directionPin,
                                     stepPin,
-                                    stepsMode="Full",
+                                    stepsMode="1/8",
                                     modeGpioPins=None,
                                     enableGpioPin=None,
                                     steppingCompleteEventName="steppingComplete"):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
         acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
-        return TMC2209MotorDriver(stepperMotor=stepperMotor,
-                                  accelerationStrategy=acceleration,
-                                  directionGpioPin=directionPin,
-                                  stepGpioPin=stepPin,
-                                  navigation=navigation,
-                                  stepsMode=stepsMode,
-                                  modeGpioPins=modeGpioPins,
-                                  enableGpioPin=enableGpioPin,
-                                  jobQueue=queue,
-                                  sharedMemory=sharedMemory,
-                                  isProxy=isProxy,
-                                  steppingCompleteEventName=steppingCompleteEventName,
-                                  jobCompletionObserver=jobCompletionObserver)
+        return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
+                                            accelerationStrategy=acceleration,
+                                            directionGpioPin=directionPin,
+                                            stepGpioPin=stepPin,
+                                            navigation=navigation,
+                                            stepsMode=stepsMode,
+                                            modeGpioPins=modeGpioPins,
+                                            enableGpioPin=enableGpioPin,
+                                            jobQueue=queue,
+                                            sharedMemory=sharedMemory,
+                                            isProxy=isProxy,
+                                            steppingCompleteEventName=steppingCompleteEventName,
+                                            jobCompletionObserver=jobCompletionObserver)
 
     class Unpacker:
         def __init__(self, factoryOrders, queues: list, sharedMemories: list, eventMultiprocessObserver):

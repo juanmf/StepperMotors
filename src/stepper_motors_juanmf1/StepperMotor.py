@@ -111,7 +111,7 @@ class PG35S_D48_HHC2(StepperMotor):
     """
     Steps per Revolution with 1.8 deg per step
     """
-    SPR = 360 // 0.212  # Steps per Revolution, 0.212 is angle per step in deg
+    SPR = int(360 / 0.212)  # Steps per Revolution, 0.212 is angle per step in deg
 
     # A Pulse implies full period. so signal to GPIO doubles this freq.
     # use benchSleep to find RPI overhead near the specified sleep time (the lower sleep time the greater the overhead):
@@ -185,7 +185,7 @@ class Nema23_3Nm_23HS45_4204S(StepperMotor):
     """
     Steps per Revolution with 1.8 deg per step
     """
-    SPR = 360 // 1.8  # Steps per Revolution, 0.212 is angle per step in deg
+    SPR = int(360 / 1.8)
 
     # Max tested functional speed was 1067
     LOADED_MAX_PPS = 4000  # DatasheetMax is 1500
@@ -201,11 +201,11 @@ class Nema23_3Nm_23HS45_4204S(StepperMotor):
         minPps = minPps if minPps else self.MIN_PPS
 
         super().__init__(maxPps=self.PPS_MAP[loaded],
-                         minSleepTime=PG35S_D48_HHC2.SLEEP_TIME_MAP[loaded],
+                         minSleepTime=Nema23_3Nm_23HS45_4204S.SLEEP_TIME_MAP[loaded],
                          maxSleepTime=1 / minPps,
                          minPps=minPps,
-                         spr=PG35S_D48_HHC2.SPR,
-                         torqueCurve=PG35S_D48_HHC2.TORQUE_CURVE)
+                         spr=Nema23_3Nm_23HS45_4204S.SPR,
+                         torqueCurve=Nema23_3Nm_23HS45_4204S.TORQUE_CURVE)
 
 class Nema17_59Ncm_17HS19_2004S1(StepperMotor):
     """
@@ -241,7 +241,7 @@ class Nema17_59Ncm_17HS19_2004S1(StepperMotor):
     """
     Steps per Revolution with 1.8 deg per step
     """
-    SPR = 360 // 1.8  # Steps per Revolution, 0.212 is angle per step in deg
+    SPR = int(360 / 1.8)
 
     # Max tested functional speed was 1067
     LOADED_MAX_PPS = 2500  # DatasheetMax is 1500
@@ -257,11 +257,11 @@ class Nema17_59Ncm_17HS19_2004S1(StepperMotor):
         minPps = minPps if minPps else self.MIN_PPS
 
         super().__init__(maxPps=self.PPS_MAP[loaded],
-                         minSleepTime=PG35S_D48_HHC2.SLEEP_TIME_MAP[loaded],
+                         minSleepTime=Nema17_59Ncm_17HS19_2004S1.SLEEP_TIME_MAP[loaded],
                          maxSleepTime=1 / minPps,
                          minPps=minPps,
-                         spr=PG35S_D48_HHC2.SPR,
-                         torqueCurve=PG35S_D48_HHC2.TORQUE_CURVE)
+                         spr=Nema17_59Ncm_17HS19_2004S1.SPR,
+                         torqueCurve=Nema17_59Ncm_17HS19_2004S1.TORQUE_CURVE)
 
 
 class Nema17_42Ncm_17HS4401(StepperMotor):
@@ -295,12 +295,12 @@ class Nema17_42Ncm_17HS4401(StepperMotor):
     Gathered with module Benchmark
     format: (PPS, increment) Speeds up the fastest from 200 to 1044 PPS.
     """
-    TORQUE_CURVE = [(200, 150), (350, 0)]
+    TORQUE_CURVE = [(200, 150), (350, 150), (500, 150), (650, 150), (800, 100), (900, 50), (950, 50), (1000, 0)]
 
     """
     Steps per Revolution with 1.8 deg per step
     """
-    SPR = 360 // 1.8  # Steps per Revolution, 0.212 is angle per step in deg
+    SPR = int(360 / 1.8)
 
     # Max tested functional speed was 1067
     LOADED_MAX_PPS = 2500  # DatasheetMax is 1500
@@ -316,11 +316,11 @@ class Nema17_42Ncm_17HS4401(StepperMotor):
         minPps = minPps if minPps else self.MIN_PPS
 
         super().__init__(maxPps=self.PPS_MAP[loaded],
-                         minSleepTime=PG35S_D48_HHC2.SLEEP_TIME_MAP[loaded],
+                         minSleepTime=Nema17_42Ncm_17HS4401.SLEEP_TIME_MAP[loaded],
                          maxSleepTime=1 / minPps,
                          minPps=minPps,
-                         spr=PG35S_D48_HHC2.SPR,
-                         torqueCurve=PG35S_D48_HHC2.TORQUE_CURVE)
+                         spr=Nema17_42Ncm_17HS4401.SPR,
+                         torqueCurve=Nema17_42Ncm_17HS4401.TORQUE_CURVE)
 
 
 class GenericStepper(StepperMotor):

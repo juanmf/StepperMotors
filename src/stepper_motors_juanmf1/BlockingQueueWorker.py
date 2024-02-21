@@ -285,11 +285,11 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
                 tprint(f"Job didn't even start. Setting error to both startTime and endTime Futures.")
                 self.startTime.set_exception(throwable)
                 self.endTime.set_exception(throwable)
-                self.block.set_exception(throwable)
+                not self.block.done() and self.block.set_exception(throwable)
             elif not self.endTime.done():
                 tprint(f"Job started but could not complete. Setting error to endTime Future.")
                 self.endTime.set_exception(throwable)
-                self.block.set_exception(throwable)
+                not self.block.done() and self.block.set_exception(throwable)
             else:
                 tprint(f"Job Futures Done when trying to set exception. Job:{self}.")
 
