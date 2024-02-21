@@ -40,6 +40,24 @@ A few distinct concepts have been implemented:
  `EventDispatcher` uses `MultiprocessObserver` to gain awareness of, and proxy events from, child dedicated process 
   running motor drivers, so in effect, driver events are (re)published in MainProcess where your app resides. 
 
+## Implemented Drivers
+The following table shows what driers have specific implementations, and vaguely their signaling specs, 
+headers marker with * are concepts the MotorDriver base class knows about, 
+Explicitly implemented Driver names are marked with ***Bolded**.
+Driers that should work with implemented classes in _Italic_ 
+
+| Driver        | Step* (Pulse 20-50μs) | Direction* | Enable*     | Sleep*      | Microstepping* (Number of Pins) | Fault          | Implemented |
+|---------------|-----------------------|------------|-------------|-------------|---------------------------------|----------------|-------------|
+| **DRV8825**       | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW  | ACTIVE LOW  | 3 (2^3 = 8 modes)               | YES            | Yes         |
+| **TMC2209**       | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW  | NA          | 4 (2^4 = 16 modes)              | YES            | Yes         |
+| _A4988_         | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW  | ACTIVE LOW  | 3 (2^3 = 8 modes)               | NO             | Eq(DRV8825) |
+| TB6600        | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW  | ACTIVE LOW  | 3 (2^3 = 8 modes)               | YES            |             |
+| TMC2208       | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW  | NA          | 4 (2^4 = 16 modes)              | YES            |             |
+| TMC2226       | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW  | NA          | 4 (2^4 = 16 modes)              | YES            |             |
+| LV8729        | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW  | ACTIVE LOW  | 3 (2^3 = 8 modes)               | NO             |             |
+| L298N         | 1-2μs (min)           | HIGH/LOW   | ACTIVE HIGH | ACTIVE HIGH | N/A                             | NO             |             |
+| ULN2003       | 1-2μs (min)           | HIGH/LOW   | ACTIVE HIGH | ACTIVE HIGH | N/A                             | NO             |             |
+
 ## Demo
 
 All motors driven by dedicated DRV8825.

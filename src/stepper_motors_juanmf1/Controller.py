@@ -529,6 +529,8 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
 
 class TMC2209MotorDriver(BipolarStepperMotorDriver):
     """
+    Should work with drop-in replacements as well:
+    TMC2208 / TMC2209 / TMC2226
     No UART support
     Current adjustment formula: (vRef = 0.71 * 2 * I = 1.42 * I)
 
