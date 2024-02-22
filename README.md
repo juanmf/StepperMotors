@@ -59,6 +59,7 @@ Driers that should work with implemented classes in _Italic_
 | [L298N](https://forum.arduino.cc/t/stepper-motor-basics/275223) <td colspan=3> Not sure I'll implement a H-Bridge type |  
 | ULN2003 <td colspan=3> Unipolar driers Not supported                                                                   |
 
+
 ## Demo
 
 All motors driven by dedicated DRV8825.
@@ -76,8 +77,10 @@ All motors driven by dedicated DRV8825.
 
 [![4 steppers](https://img.youtube.com/vi/WprF3Dy7BbE/0.jpg)](https://www.youtube.com/watch?v=WprF3Dy7BbE)
 
+### Demo TMC2209(Nema17-17hs4401) + DRV8825(PG35S)
 
-![doc/collab.png](./doc/collab.png)
+[TMC2209 + DRV8825](https://www.youtube.com/shorts/Njm-9dQ66Vc)
+
 
 ## Install
 ### Happy path
@@ -598,6 +601,7 @@ class PolarCoordinatesSample:
 High level flow
 ![doc/multiprocess.png](./doc/multiprocess.png)
 
+
 #### 3 ways data is shared between Processes:
 ##### Slow:
 * MainProcess signals Child Process to perform  Stepping Jobs (`driver.signedSteps()`, `stepClockWise()`, 
@@ -728,6 +732,13 @@ User app level waited for both drivers to be comlete before firing application l
 @end thread dump EventDispatcher__0_0 =========================================
 
 ```
+## Architecture
+
+This library is designed to be extended, with minimal or no changes to existing implementations.
+Main components and relations outlined in the following class diagram.
+
+![doc/collab.png](./doc/collab.png)
+
 
 ## Contributing
 

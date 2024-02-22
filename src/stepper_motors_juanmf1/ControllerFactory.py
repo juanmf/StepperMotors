@@ -9,7 +9,7 @@ from stepper_motors_juanmf1.AccelerationStrategy import (LinearAcceleration, Acc
                                                          StaticDelayPlanner,
                                                          InteractiveAcceleration, DelayPlanner)
 from stepper_motors_juanmf1.Controller import (DRV8825MotorDriver, TMC2209StandaloneMotorDriver,
-                                               DriverSharedPositionStruct, MotorDriver)
+                                               DriverSharedPositionStruct, MotorDriver, BipolarStepperMotorDriver)
 from stepper_motors_juanmf1.Navigation import (DynamicNavigation, StaticNavigation, Navigation,
                                                BasicSynchronizedNavigation)
 
@@ -32,7 +32,10 @@ class ControllerFactory:
                            enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = AccelerationStrategy(stepperMotor, delayPlanner)
+        acceleration = AccelerationStrategy(stepperMotor,
+                                            delayPlanner,
+                                            steppingModeMultiple=BipolarStepperMotorDriver
+                                                    .RESOLUTION_MULTIPLE[stepsMode])
         return DRV8825MotorDriver(stepperMotor=stepperMotor,
                                   accelerationStrategy=acceleration,
                                   directionGpioPin=directionPin,
@@ -49,7 +52,10 @@ class ControllerFactory:
                              enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = LinearAcceleration(stepperMotor, delayPlanner)
+        acceleration = LinearAcceleration(stepperMotor,
+                                          delayPlanner,
+                                          steppingModeMultiple=BipolarStepperMotorDriver
+                                                  .RESOLUTION_MULTIPLE[stepsMode])
         return DRV8825MotorDriver(stepperMotor=stepperMotor,
                                   accelerationStrategy=acceleration,
                                   directionGpioPin=directionPin,
@@ -66,7 +72,10 @@ class ControllerFactory:
                                   enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
+        acceleration = ExponentialAcceleration(stepperMotor,
+                                               delayPlanner,
+                                               steppingModeMultiple=BipolarStepperMotorDriver
+                                                    .RESOLUTION_MULTIPLE[stepsMode])
         return DRV8825MotorDriver(stepperMotor=stepperMotor,
                                   accelerationStrategy=acceleration,
                                   directionGpioPin=directionPin,
@@ -84,7 +93,11 @@ class ControllerFactory:
                                                   enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = CustomAccelerationPerPps(stepperMotor, delayPlanner, transformations=transformations)
+        acceleration = CustomAccelerationPerPps(stepperMotor,
+                                                delayPlanner,
+                                                transformations=transformations,
+                                                steppingModeMultiple=BipolarStepperMotorDriver
+                                                        .RESOLUTION_MULTIPLE[stepsMode])
         return DRV8825MotorDriver(stepperMotor=stepperMotor,
                                   accelerationStrategy=acceleration,
                                   directionGpioPin=directionPin,
@@ -101,7 +114,12 @@ class ControllerFactory:
                                   enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = InteractiveAcceleration(stepperMotor, delayPlanner, minSpeedDelta, minPps)
+        acceleration = InteractiveAcceleration(stepperMotor,
+                                               delayPlanner,
+                                               minSpeedDelta,
+                                               minPps,
+                                               steppingModeMultiple=BipolarStepperMotorDriver
+                                                       .RESOLUTION_MULTIPLE[stepsMode])
         return DRV8825MotorDriver(stepperMotor=stepperMotor,
                                   accelerationStrategy=acceleration,
                                   directionGpioPin=directionPin,
@@ -118,7 +136,10 @@ class ControllerFactory:
                            enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = AccelerationStrategy(stepperMotor, delayPlanner)
+        acceleration = AccelerationStrategy(stepperMotor,
+                                            delayPlanner,
+                                            steppingModeMultiple=BipolarStepperMotorDriver
+                                                    .RESOLUTION_MULTIPLE[stepsMode])
         return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
                                             accelerationStrategy=acceleration,
                                             directionGpioPin=directionPin,
@@ -134,7 +155,10 @@ class ControllerFactory:
                              enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = LinearAcceleration(stepperMotor, delayPlanner)
+        acceleration = LinearAcceleration(stepperMotor,
+                                          delayPlanner,
+                                          steppingModeMultiple=BipolarStepperMotorDriver
+                                                .RESOLUTION_MULTIPLE[stepsMode])
         return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
                                             accelerationStrategy=acceleration,
                                             directionGpioPin=directionPin,
@@ -150,7 +174,10 @@ class ControllerFactory:
                                   enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
+        acceleration = ExponentialAcceleration(stepperMotor,
+                                               delayPlanner,
+                                               steppingModeMultiple=BipolarStepperMotorDriver
+                                                    .RESOLUTION_MULTIPLE[stepsMode])
         return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
                                             accelerationStrategy=acceleration,
                                             directionGpioPin=directionPin,
@@ -166,7 +193,11 @@ class ControllerFactory:
                                                   enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = CustomAccelerationPerPps(stepperMotor, delayPlanner, transformations=transformations)
+        acceleration = CustomAccelerationPerPps(stepperMotor,
+                                                delayPlanner,
+                                                transformations=transformations,
+                                                steppingModeMultiple=BipolarStepperMotorDriver
+                                                        .RESOLUTION_MULTIPLE[stepsMode])
         return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
                                             accelerationStrategy=acceleration,
                                             directionGpioPin=directionPin,
@@ -182,7 +213,12 @@ class ControllerFactory:
                                   enableGpioPin=None):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = InteractiveAcceleration(stepperMotor, delayPlanner, minSpeedDelta, minPps)
+        acceleration = InteractiveAcceleration(stepperMotor,
+                                               delayPlanner,
+                                               minSpeedDelta,
+                                               minPps,
+                                               steppingModeMultiple=BipolarStepperMotorDriver
+                                                       .RESOLUTION_MULTIPLE[stepsMode])
         return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
                                             accelerationStrategy=acceleration,
                                             directionGpioPin=directionPin,
@@ -295,7 +331,11 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
 
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = CustomAccelerationPerPps(stepperMotor, delayPlanner, transformations=transformations)
+        acceleration = CustomAccelerationPerPps(stepperMotor,
+                                                delayPlanner,
+                                                transformations=transformations,
+                                                steppingModeMultiple=BipolarStepperMotorDriver
+                                                        .RESOLUTION_MULTIPLE[stepsMode])
 
         driver = DRV8825MotorDriver(stepperMotor=stepperMotor,
                                     accelerationStrategy=acceleration,
@@ -326,7 +366,10 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                steppingCompleteEventName="steppingComplete"):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = LinearAcceleration(stepperMotor, delayPlanner)
+        acceleration = LinearAcceleration(stepperMotor,
+                                          delayPlanner,
+                                          steppingModeMultiple=BipolarStepperMotorDriver
+                                                  .RESOLUTION_MULTIPLE[stepsMode])
         return DRV8825MotorDriver(stepperMotor=stepperMotor,
                                   accelerationStrategy=acceleration,
                                   directionGpioPin=directionPin,
@@ -353,7 +396,10 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                     steppingCompleteEventName="steppingComplete"):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
+        acceleration = ExponentialAcceleration(stepperMotor,
+                                               delayPlanner,
+                                               steppingModeMultiple=BipolarStepperMotorDriver
+                                                       .RESOLUTION_MULTIPLE[stepsMode])
         return DRV8825MotorDriver(stepperMotor=stepperMotor,
                                   accelerationStrategy=acceleration,
                                   directionGpioPin=directionPin,
@@ -381,7 +427,11 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
 
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = CustomAccelerationPerPps(stepperMotor, delayPlanner, transformations=transformations)
+        acceleration = CustomAccelerationPerPps(stepperMotor,
+                                                delayPlanner,
+                                                transformations=transformations,
+                                                steppingModeMultiple=BipolarStepperMotorDriver
+                                                        .RESOLUTION_MULTIPLE[stepsMode])
 
         driver = TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
                                               accelerationStrategy=acceleration,
@@ -409,7 +459,11 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                steppingCompleteEventName="steppingComplete"):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = LinearAcceleration(stepperMotor, delayPlanner)
+        acceleration = LinearAcceleration(stepperMotor,
+                                          delayPlanner,
+                                          steppingModeMultiple=BipolarStepperMotorDriver
+                                                  .RESOLUTION_MULTIPLE[stepsMode])
+
         return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
                                             accelerationStrategy=acceleration,
                                             directionGpioPin=directionPin,
@@ -434,7 +488,11 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                     steppingCompleteEventName="steppingComplete"):
         delayPlanner = self.getDelayPlanner()
         navigation = self.getNavigation()
-        acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
+        acceleration = ExponentialAcceleration(stepperMotor,
+                                               delayPlanner,
+                                               steppingModeMultiple=BipolarStepperMotorDriver
+                                                       .RESOLUTION_MULTIPLE[stepsMode])
+
         return TMC2209StandaloneMotorDriver(stepperMotor=stepperMotor,
                                             accelerationStrategy=acceleration,
                                             directionGpioPin=directionPin,
