@@ -31,8 +31,16 @@ class MotorDriver(BlockingQueueWorker):
     INSTANCES_COUNT = 0
     PULSE_TIME_MICROS = None
 
-    def __init__(self, *, stepperMotor, accelerationStrategy, workerName, jobQueueMaxSize=2, jobQueue=None,
-                 sharedMemory=None, isProxy=False, jobCompletionObserver=None):
+    def __init__(self, *, stepperMotor,
+                 directionGpioPin,
+                 stepGpioPin,
+                 accelerationStrategy,
+                 workerName,
+                 jobQueueMaxSize=2,
+                 jobQueue=None,
+                 sharedMemory=None,
+                 isProxy=False,
+                 jobCompletionObserver=None):
 
         workerName = f"{self.__class__.__name__}_{MotorDriver.INSTANCES_COUNT}_" \
                      if workerName is None else workerName
@@ -44,6 +52,8 @@ class MotorDriver(BlockingQueueWorker):
                          jobCompletionObserver=jobCompletionObserver)
 
         MotorDriver.INSTANCES_COUNT += 1
+        self.stepGpioPin = stepGpioPin
+        self.directionGpioPin = directionGpioPin
         self.stepperMotor = stepperMotor
         self.accelerationStrategy = accelerationStrategy
         if sharedMemory is not None:
@@ -70,10 +80,12 @@ class MotorDriver(BlockingQueueWorker):
         pass
 
     @abstractmethod
-    def pulseStart(self):
+    def pulseStart(self, stepRelativeToJobStart=None):
         """
         In most controllers this would mean set step pint to HIGH
-        @return:
+        @param stepRelativeToJobStart: for each step job, starts from zero, not related to absolute position.
+                                       Used to pick sequence in Unipolar Driers. Depending on Direction should increase
+                                       or decrease. Can be negative.
         """
         pass
 
@@ -207,6 +219,8 @@ class BipolarStepperMotorDriver(MotorDriver):
         [GND]       39 * * 40 [GPIO_21]
         """
         super().__init__(stepperMotor=stepperMotor,
+                         directionGpioPin=directionGpioPin,
+                         stepGpioPin=stepGpioPin,
                          accelerationStrategy=accelerationStrategy,
                          workerName=workerName,
                          jobQueue=jobQueue,
@@ -219,8 +233,6 @@ class BipolarStepperMotorDriver(MotorDriver):
         self.modeGpioPins = modeGpioPins  # Microstep Resolution GPIO Pins
         self.stepsMode = stepsMode
         self.sleepGpioPin = sleepGpioPin
-        self.stepGpioPin = stepGpioPin
-        self.directionGpioPin = directionGpioPin
         # Tracks current either by position for position based movement (DynamicNavigation, interruptible)
         # or by fixed number of steps (StaticNavigation, uninterruptible).
         self.navigation = navigation
@@ -325,15 +337,20 @@ class BipolarStepperMotorDriver(MotorDriver):
                                                     'endTime': time.monotonic_ns()
                                                     })
 
-    def _operateStepper(self, direction, steps, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
+    def _operateStepper(self, direction, steps, fn=None, jobCompleteEventNamePrefix="", maxStepsPerSecondOverride=None,
                         eventInAdvanceSteps=10):
-        if maxPpsOverride:
+        """
+        @param maxStepsPerSecondOverride: for this stepping job, override motor's steps per second.
+                                          maxPps == maxStepsPerSecond on Full step mode only.
+        @return:
+        """
+        if maxStepsPerSecondOverride:
             oldPps = self.accelerationStrategy.getMaxPPS()
-            self.accelerationStrategy.setMaxPPS(maxPpsOverride)
-            self._doOperateStepper(direction, steps, fn, jobCompleteEventNamePrefix,eventInAdvanceSteps)
+            self.accelerationStrategy.setMaxPPS(maxStepsPerSecondOverride)
+            self._doOperateStepper(direction, steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps)
             self.accelerationStrategy.setMaxPPS(oldPps)
         else:
-            self._doOperateStepper(direction, steps, fn, jobCompleteEventNamePrefix,eventInAdvanceSteps)
+            self._doOperateStepper(direction, steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps)
 
     def getActualCurrentPosition(self):
         self.actualCurrentPosition = self.steppingModeMultiple * self.getCurrentPosition()
@@ -466,6 +483,18 @@ class BipolarStepperMotorDriver(MotorDriver):
         GPIO.output(self.directionGpioPin, directionState)
         self.currentDirection = directionState
 
+    def pulseStart(self, stepRelativeToJobStart=None):
+        """
+        In most controllers this would mean set step pint to HIGH
+        """
+        GPIO.output(self.stepGpioPin, GPIO.HIGH)
+
+    def pulseStop(self):
+        """
+        In most controllers this would mean set step pint to HIGH
+        """
+        GPIO.output(self.stepGpioPin, GPIO.LOW)
+
     @abstractmethod
     def setSleepMode(self, sleepOn=False):
         pass
@@ -583,19 +612,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         state = GPIO.LOW if enableOn else GPIO.HIGH
         GPIO.output(self.enableGpioPin, state)
 
-    def pulseStart(self):
-        """
-        In most controllers this would mean set step pint to HIGH
-        @return:
-        """
-        GPIO.output(self.stepGpioPin, GPIO.HIGH)
-
-    def pulseStop(self):
-        """
-        In most controllers this would mean set step pint to LOW
-        @return:
-        """
-        GPIO.output(self.stepGpioPin, GPIO.LOW)
 
 # class TB6560(BipolarStepperMotorDriver):
 #     pass
@@ -823,23 +839,9 @@ class TMC2209StandaloneMotorDriver(BipolarStepperMotorDriver):
         state = GPIO.LOW if enableOn else GPIO.HIGH
         GPIO.output(self.enableGpioPin, state)
 
-    def pulseStart(self):
-        """
-        In most controllers this would mean set step pint to HIGH
-        @return:
-        """
-        GPIO.output(self.stepGpioPin, GPIO.HIGH)
-
-    def pulseStop(self):
-        """
-        In most controllers this would mean set step pint to LOW
-        @return:
-        """
-        GPIO.output(self.stepGpioPin, GPIO.LOW)
-
-    def _operateStepper(self, direction, steps, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
+    def _operateStepper(self, direction, steps, fn=None, jobCompleteEventNamePrefix="", maxStepsPerSecondOverride=None,
                         eventInAdvanceSteps=10):
-        super()._operateStepper(direction, steps, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps)
+        super()._operateStepper(direction, steps, fn, jobCompleteEventNamePrefix, maxStepsPerSecondOverride, eventInAdvanceSteps)
         self.checkPositionVsIndexReportedPosition()
 
     def checkPositionVsIndexReportedPosition(self):

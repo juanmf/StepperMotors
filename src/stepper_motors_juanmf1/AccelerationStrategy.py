@@ -40,8 +40,8 @@ class AccelerationStrategy:
         delayPlanner.setAccelerationStrategy(self)
 
     def setMaxPPS(self, maxPps):
-        self.maxPps = maxPps
-        self.minSleepTimeUs = int(1_000_000 / maxPps)
+        self.maxPps = maxPps / self.steppingModeMultiple
+        self.minSleepTimeUs = int(1_000_000 / self.maxPps)
 
     def getMaxPPS(self):
         return self.maxPps

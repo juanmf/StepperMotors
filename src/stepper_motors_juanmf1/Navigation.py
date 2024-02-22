@@ -4,6 +4,7 @@ import traceback
 from concurrent.futures import Future
 
 from RPi import GPIO
+from stepper_motors_juanmf1.UnipolarController import UnipolarMotorDriver
 
 from stepper_motors_juanmf1.myMath import cmp
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
@@ -47,6 +48,17 @@ class Navigation:
     def isInterruptible():
         pass
 
+    @staticmethod
+    def waitNextCycle(*, pulseStartNs, pulseDurationUs):
+        # Using pulse time to catch up with user logic and sleepTime computation.
+        pulseElapsedUs = (time.monotonic_ns() - pulseStartNs) // 1000
+        remainingSleepUs = pulseDurationUs - pulseElapsedUs
+        if remainingSleepUs > 5:
+            # Arbitrarily just continue if remaining sleep time < 5us
+            MotorDriver.usleep(remainingSleepUs)
+        else:
+            tprint("Warning: Can't process user fn, events and sleepTime calculations within pulse duration.")
+
 
 class StaticNavigation(Navigation):
     def go(self, controller: MotorDriver, targetPosition, accelerationStrategy, fn, interruptPredicate,
@@ -62,11 +74,12 @@ class StaticNavigation(Navigation):
         step = 0
         totalSteps = abs(initialPosition - targetPosition)
         for position in range(initialPosition, targetPosition, signedDirection):
+            pulseStart = time.monotonic_ns()
             self.pulseController(controller)
             # Todo: see to make this work with actual position
             accelerationStrategy.computeSleepTimeUs(step, totalSteps)
             controller.setCurrentPosition(position)
-            controller.usleep(accelerationStrategy.currentSleepTimeUs)
+
             # fn should not consume many CPU instructions to avoid delays between steps.
             if fn:
                 fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection,
@@ -74,6 +87,9 @@ class StaticNavigation(Navigation):
 
             if abs(targetPosition - position) == eventInAdvanceSteps:
                 EventDispatcher.instance().publishMainLoop(eventName + "Advance", {'position': position})
+
+            # Using pulse time to catch up with user logic and sleepTime computation.
+            Navigation.waitNextCycle(pulseStartNs=pulseStart, pulseDurationUs=accelerationStrategy.currentSleepTimeUs)
 
         accelerationStrategy.done()
         controller.setDirection(GPIO.LOW)
@@ -93,15 +109,15 @@ class DynamicNavigation(Navigation):
         while not (controller.getCurrentPosition() == targetPosition and accelerationStrategy.canStop()):
             if interruptPredicate():
                 return
-            # Direction is set in position based acceleration' state machine.
-            controller.setCurrentPosition(accelerationStrategy.computeSleepTimeUs(
-                controller.getCurrentPosition(), targetPosition, lambda d: controller.setDirection(d)))
-
+            pulseStart = time.monotonic_ns()
             self.pulseController(controller)
+            # Direction is set in position based acceleration' state machine.
+            # Todo: computeSleepTimeUs returning position is obscure.
+            controller.setCurrentPosition(
+                accelerationStrategy.computeSleepTimeUs(controller.getCurrentPosition(),
+                                                        targetPosition,
+                                                        lambda d: controller.setDirection(d)))
 
-            micros = accelerationStrategy.getCurrentSleepUs()
-
-            controller.usleep(micros)
             position = controller.getCurrentPosition()
             # fn should not consume many CPU instructions to avoid delays between steps.
             if fn:
@@ -109,8 +125,10 @@ class DynamicNavigation(Navigation):
                    controller.multiprocessObserver)
 
             if (abs(targetPosition - position) == eventInAdvanceSteps
-                and cmp(targetPosition, position) == controller.accelerationStrategy.realDirection):
+                    and cmp(targetPosition, position) == controller.accelerationStrategy.realDirection):
                 EventDispatcher.instance().publishMainLoop(eventName + "Advance", {'position': position})
+
+            Navigation.waitNextCycle(pulseStartNs=pulseStart, pulseDurationUs=accelerationStrategy.getCurrentSleepUs())
 
 
         # todo: check if still needed.
@@ -160,12 +178,14 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         # this job is navigation level. there is a job per driver we need to complete independently.
         navJob = self.work([self.PulsingController(
                 controller, controller.stepperMotor.getMinSleepTime(), targetPosition, fn, interruptPredicate,
-                eventInAdvanceSteps=eventInAdvanceSteps, eventName=eventName)])
+                eventInAdvanceSteps=eventInAdvanceSteps, eventName=eventName, high=self.high)])
         return controller.currentJob.block
 
     def __doGo(self, pulsingController):
         self.putPulsingController(time.monotonic_ns(), pulsingController)
         duePulses = []
+        duePulsesStates = []
+        bipolarStepPins = []
         dueControllers = []
         try:
             while self.pulsingControllers:
@@ -183,16 +203,20 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                         break
                     if self.checkDone(pulsingController):
                         continue
+                    pulsingController.addDueControllerFn(duePulses,
+                                                         duePulsesStates,
+                                                         dueControllers,
+                                                         bipolarStepPins)
                     duePulses.append(pulsingController.controller.stepGpioPin)
                     dueControllers.append(pulsingController)
 
                 if duePulses:
-                    GPIO.output(duePulses, self.high)
+                    GPIO.output(duePulses, duePulsesStates)
                     self.updateSleepTimes(dueControllers, pulseTime, count=2)
                     while pulseTime + self.driverPulseTimeNs > time.monotonic_ns():
                         # Small active wait in case updateSleepTimes() didn't consume Driver's min pulse time.
                         pass
-                    GPIO.output(duePulses, self.low)
+                    GPIO.output(bipolarStepPins, self.low)
                     # Finish with remaining controllers after sending LOW
                     if dueControllers:
                         self.updateSleepTimes(dueControllers, pulseTime)
@@ -267,12 +291,31 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         return controllerIsDone
 
     class PulsingController:
+        # TODO: Recycle instances to prevent garbage collection. Can help too with keeping pulseCount on interruptions
         def __init__(self, controller: MotorDriver, sleepTime, targetPosition, fn=None, interruptPredicate=None,
-                     eventInAdvanceSteps=None, eventName="steppingComplete"):
+                     eventInAdvanceSteps=None, eventName="steppingComplete", high=GPIO.HIGH):
             self.controller: MotorDriver = controller
+            self.addDueControllerFn = self.addUnipolarPulses if isinstance(controller, UnipolarMotorDriver) \
+                                      else self.addBipolarPulses
             self.sleepTime = sleepTime
             self.targetPosition = targetPosition
             self.fn = fn
             self.interruptPredicate = interruptPredicate
             self.eventInAdvanceSteps = eventInAdvanceSteps
             self.eventName = eventName
+            self.pulseCount = 0
+            self.high = high
+
+        def addUnipolarPulses(self, duePulses: list, duePulsesStates: list, dueControllers: list,
+                              bipolarStepPins: list):
+            dueControllers.append(self)
+            duePulses.extend(self.controller.stepGpioPin)
+            duePulsesStates.extend(self.controller.sequence.getStepSequence(self.pulseCount))
+            self.pulseCount += self.controller.accelerationStrategy.realDirection
+
+        def addBipolarPulses(self, duePulses: list, duePulsesStates, dueControllers: list,
+                             bipolarStepPins: list):
+            dueControllers.append(self)
+            duePulses.append(self.controller.stepGpioPin)
+            bipolarStepPins.append(self.controller.stepGpioPin)
+            duePulsesStates.append(self.high)

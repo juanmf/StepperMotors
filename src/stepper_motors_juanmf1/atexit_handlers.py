@@ -1,5 +1,6 @@
 import atexit
 import signal
+from RPi import GPIO
 from multiprocessing import current_process
 
 from stepper_motors_juanmf1 import BlockingQueueWorker
@@ -9,6 +10,7 @@ from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_streams
 def interrupt_handler(signum, frame):
     tprint(f"Received signal {signum}. Cleaning up before exit.")
     BlockingQueueWorker.killWorkers()
+    GPIO.cleanup()
     flush_streams()
     # exit the process
     process = current_process()
