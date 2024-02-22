@@ -10,7 +10,7 @@ class AccelerationStrategy:
     Base Strategy class implements flat (min) speed.
     """
 
-    def __init__(self, stepperMotor: StepperMotor, delayPlanner, rampSteps=None):
+    def __init__(self, stepperMotor: StepperMotor, delayPlanner, rampSteps=None, steppingModeMultiple=1):
         """
         :param stepperMotor: Stepper to take parameters from, like [min/max]PPS and so on.
         :param delayPlanner: delayPlanner to use to compute sleep time between steps as motor ramps up/down & while
@@ -21,13 +21,13 @@ class AccelerationStrategy:
         # Todo: evaluate having rampUpSteps & rampDownSteps as it might differ.
         self.rampSteps = rampSteps
 
-        self.maxPps = stepperMotor.getMaxPps()
-        self.minPps = stepperMotor.getMinPps()
+        self.maxPps = int(stepperMotor.getMaxPps() / steppingModeMultiple)
+        self.minPps = int(stepperMotor.getMinPps() / steppingModeMultiple)
 
         # Keeps track of speed, in terms of pps, and direction (-, +) useful for momentum considerations.
         self.currentPps = self.minPps
-        minSleepTimeSeconds = stepperMotor.getMinSleepTime()
-        maxSleepTimeSeconds = stepperMotor.getMaxSleepTime()
+        minSleepTimeSeconds = 1 / self.maxPps
+        maxSleepTimeSeconds = 1 / self.minPps
         self.minSleepTimeUs = int(minSleepTimeSeconds * 1_000_000)
         self.maxSleepTimeUs = int(maxSleepTimeSeconds * 1_000_000)
 
@@ -36,6 +36,7 @@ class AccelerationStrategy:
         self.shouldBreakCache = {}
 
         self.delayPlanner = delayPlanner
+        self.steppingModeMultiple = steppingModeMultiple
         delayPlanner.setAccelerationStrategy(self)
 
     def setMaxPPS(self, maxPps):
@@ -117,8 +118,8 @@ class LinearAcceleration(AccelerationStrategy):
     minimum torque (wasteful).
     """
 
-    def __init__(self, stepperMotor: StepperMotor, delayPlanner, rampSteps=25):
-        super().__init__(stepperMotor, delayPlanner, rampSteps)
+    def __init__(self, stepperMotor: StepperMotor, delayPlanner, rampSteps=25, steppingModeMultiple=1):
+        super().__init__(stepperMotor, delayPlanner, rampSteps, steppingModeMultiple)
         self.sleepDeltaUs = (self.maxSleepTimeUs - self.minSleepTimeUs) / rampSteps
         self.currentSleepTimeUs = self.maxSleepTimeUs
 
@@ -157,8 +158,8 @@ class ExponentialAcceleration(AccelerationStrategy):
     When you move "a" bar to change currentPPS the speedUp nd speedDown curves converge to maxPPS when a -> maxPPS meaning
       no acceleration.
     """
-    def __init__(self, stepperMotor: StepperMotor, delayPlanner, initialIncrementFactor=2):
-        super().__init__(stepperMotor, delayPlanner, None)
+    def __init__(self, stepperMotor: StepperMotor, delayPlanner, initialIncrementFactor=2, steppingModeMultiple=1):
+        super().__init__(stepperMotor, delayPlanner, None, steppingModeMultiple=steppingModeMultiple)
         pps = self.maxPps
         self.stepsToBreakCache = [pps]
         # With this formula, breaking takes more steps than accelerating. using breaking to determine rampSteps
@@ -207,14 +208,20 @@ class CustomAccelerationPerPps(AccelerationStrategy):
     Alternatively accepts an explicit set of multipliers to apply to current PPS as a proxy to instantaneous torque
     see `transformations`.
     """
-    def __init__(self, stepperMotor: StepperMotor, delayPlanner, transformations=None):
-        super().__init__(stepperMotor, delayPlanner)
+    def __init__(self, stepperMotor: StepperMotor, delayPlanner, transformations=None, steppingModeMultiple=1):
+        super().__init__(stepperMotor, delayPlanner, steppingModeMultiple=steppingModeMultiple)
         """
         Curve of optimal acceleration.
         array of tuples with max speed boost at given PPS starting from stepperMotor.MIN_PPS 
         [(minPPS, speedIncrement_1), (minPPS * speedIncrement_1, speedIncrement_2), ..., (maxPPS, 0)]
         """
         self.transformations = transformations if transformations is not None else stepperMotor.TORQUE_CURVE
+        if steppingModeMultiple != 1:
+            correctedTransformations = []
+            for pps, increment in self.transformations:
+                correctedTransformations.append((pps / steppingModeMultiple, increment / steppingModeMultiple))
+            self.transformations = correctedTransformations
+
         self.transformationsPPS = [item[0] for item in self.transformations]
         self.rampSteps = len(self.transformationsPPS)
         self.minPps = self.transformationsPPS[0]
@@ -285,14 +292,15 @@ class CustomAccelerationPerPps(AccelerationStrategy):
     """
 
     def setMinPps(self, pps):
+        pps = int(pps / self.steppingModeMultiple)
         self.minPps = pps
-        self.maxSleepTimeUs = 1_000_000 / pps
-        if self.currentPps < pps:
-            self.currentPps = pps
-            self.currentSleepTimeUs = 1_000_000 / pps
+        self.maxSleepTimeUs = 1_000_000 / self.minPps
+        if self.currentPps < self.minPps:
+            self.currentPps = self.minPps
+            self.currentSleepTimeUs = 1_000_000 / self.minPps
 
     def setMaxPps(self, pps):
-        pps = int(pps)
+        pps = int(pps / self.steppingModeMultiple)
         self.maxPps = pps
         self.minSleepTimeUs = 1_000_000 / pps
         if self.currentPps > pps:
@@ -315,8 +323,10 @@ class CustomAccelerationPerPps(AccelerationStrategy):
         :param speedDelta: New increment
         :param overrideLastSpeed: if set, prevents storing last increment, use this instead.
         """
-        self.lastSpeedDelta = self.transformations[-1][1] if not overrideLastSpeed else overrideLastSpeed
-        self.transformations[-1] = (self.transformations[-1][0], int(speedDelta))
+        self.lastSpeedDelta = self.transformations[-1][1] \
+                              if not overrideLastSpeed \
+                              else overrideLastSpeed / self.steppingModeMultiple
+        self.transformations[-1] = (self.transformations[-1][0], int(speedDelta / self.steppingModeMultiple))
         self.inferMaxPps()
 
     def resetMaxPps(self):
@@ -345,8 +355,10 @@ class CustomAccelerationPerPps(AccelerationStrategy):
         :param speedBoosts: speed transformations to use. [(minPPS, increment_1), ..., (maxPPS, 0)]
         :return: the new CustomAccelerationPerPps
         """
-        out = CustomAccelerationPerPps(
-            controller.stepperMotor, controller.accelerationStrategy.delayPlanner, speedBoosts)
+        out = CustomAccelerationPerPps(controller.stepperMotor,
+                                       controller.accelerationStrategy.delayPlanner,
+                                       speedBoosts,
+                                       controller.steppingModeMultiple)
         out.done()
         # Removing reference to delayPlanner from original accelerationStrategy
         controller.accelerationStrategy.delayPlanner = None
@@ -358,11 +370,11 @@ class InteractiveAcceleration(AccelerationStrategy):
     AccelerationStrategy that enables manually setting speed (PPS) used for stress tests in
     :func:`~ Benchmark.benchmarkMotor`.
     """
-    def __init__(self, stepperMotor, delayPlanner, minSpeedDelta, minPPS):
-        super().__init__(stepperMotor, delayPlanner, 25)
-        self.minSpeedDelta = minSpeedDelta
+    def __init__(self, stepperMotor, delayPlanner, minSpeedDelta, minPPS, steppingModeMultiple=1):
+        super().__init__(stepperMotor, delayPlanner, 25, steppingModeMultiple=steppingModeMultiple)
+        self.minSpeedDelta = int(minSpeedDelta / steppingModeMultiple)
         self.speedDelta = self.minSpeedDelta
-        self.minPps = minPPS
+        self.minPps = int(minPPS / steppingModeMultiple)
         self.maxPps = None
         self.minSleepTimeSeconds = 0
         self.minSleepTimeUs = 1_000_000 * self.minSleepTimeSeconds
@@ -391,8 +403,10 @@ class InteractiveAcceleration(AccelerationStrategy):
         self.currentPps = self.realDirection * 1_000_000 / self.currentSleepTimeUs
 
     def setSpeedDelta(self, speedDelta, overrideLastSpeed=False):
-        self.lastSpeedDelta = self.speedDelta if not overrideLastSpeed else overrideLastSpeed
-        self.speedDelta = speedDelta
+        self.lastSpeedDelta = self.speedDelta \
+                              if not overrideLastSpeed \
+                              else overrideLastSpeed / self.steppingModeMultiple
+        self.speedDelta = speedDelta / self.steppingModeMultiple
 
     def getSpeedDelta(self):
         return self.speedDelta
@@ -401,13 +415,14 @@ class InteractiveAcceleration(AccelerationStrategy):
         self.setSpeedDelta(-self.speedDelta)
 
     def setMinPps(self, minPPS):
+        minPPS = minPPS / self.steppingModeMultiple
         self.maxSleepTimeUs = 1_000_000 / minPPS
         self.minPps = minPPS
 
     def setMaxPps(self, maxPPS):
-        self.minSleepTimeSeconds = 1 / maxPPS
-        self.minSleepTimeUs = 1_000_000 / maxPPS
-        self.maxPps = maxPPS
+        self.maxPps = maxPPS / self.steppingModeMultiple
+        self.minSleepTimeSeconds = 1 / self.maxPps
+        self.minSleepTimeUs = 1_000_000 / self.maxPps
 
     def speedUp(self):
         self.rampTokens += 1
