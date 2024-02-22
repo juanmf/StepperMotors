@@ -16,6 +16,7 @@ from stepper_motors_juanmf1.Navigation import (DynamicNavigation, StaticNavigati
 from stepper_motors_juanmf1.BlockingQueueWorker import MpQueue
 from stepper_motors_juanmf1.EventDispatcher import EventDispatcher, MultiprocessObserver
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_streams_if_not_empty
+from stepper_motors_juanmf1.UnipolarController import UnipolarMotorDriver
 
 
 class ControllerFactory:
@@ -227,6 +228,100 @@ class ControllerFactory:
                                             stepsMode=stepsMode,
                                             modeGpioPins=modeGpioPins,
                                             enableGpioPin=enableGpioPin)
+
+    def getLinearUnipolarDriverWith(self,
+                                    stepperMotor,
+                                    directionPin,
+                                    stepPin,
+                                    sleepGpioPin=None,
+                                    stepsMode="Full",
+                                    enableGpioPin=None):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = LinearAcceleration(stepperMotor,
+                                          delayPlanner,
+                                          steppingModeMultiple=BipolarStepperMotorDriver
+                                                  .RESOLUTION_MULTIPLE[stepsMode])
+        return UnipolarMotorDriver(stepperMotor=stepperMotor,
+                                   accelerationStrategy=acceleration,
+                                   directionGpioPin=directionPin,
+                                   stepGpioPin=stepPin,
+                                   navigation=navigation,
+                                   sleepGpioPin=sleepGpioPin,
+                                   stepsMode=stepsMode,
+                                   enableGpioPin=enableGpioPin)
+
+    def getExponentialUnipolarDriverWith(self,
+                                         stepperMotor,
+                                         directionPin,
+                                         stepPin,
+                                         sleepGpioPin=None,
+                                         stepsMode="Full",
+                                         enableGpioPin=None):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = ExponentialAcceleration(stepperMotor,
+                                               delayPlanner,
+                                               steppingModeMultiple=BipolarStepperMotorDriver
+                                                    .RESOLUTION_MULTIPLE[stepsMode])
+        return UnipolarMotorDriver(stepperMotor=stepperMotor,
+                                   accelerationStrategy=acceleration,
+                                   directionGpioPin=directionPin,
+                                   stepGpioPin=stepPin,
+                                   navigation=navigation,
+                                   sleepGpioPin=sleepGpioPin,
+                                   stepsMode=stepsMode,
+                                   enableGpioPin=enableGpioPin)
+
+    def getCustomTorqueCharacteristicsUnipolarDriverWith(self,
+                                                         stepperMotor,
+                                                         directionPin,
+                                                         stepPin,
+                                                         transformations=None,
+                                                         sleepGpioPin=None,
+                                                         stepsMode="Full",
+                                                         enableGpioPin=None):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = CustomAccelerationPerPps(stepperMotor,
+                                                delayPlanner,
+                                                transformations=transformations,
+                                                steppingModeMultiple=BipolarStepperMotorDriver
+                                                        .RESOLUTION_MULTIPLE[stepsMode])
+        return UnipolarMotorDriver(stepperMotor=stepperMotor,
+                                   accelerationStrategy=acceleration,
+                                   directionGpioPin=directionPin,
+                                   stepGpioPin=stepPin,
+                                   navigation=navigation,
+                                   sleepGpioPin=sleepGpioPin,
+                                   stepsMode=stepsMode,
+                                   enableGpioPin=enableGpioPin)
+
+    def getInteractiveUnipolarDriverWith(self,
+                                         stepperMotor,
+                                         directionPin,
+                                         stepPin,
+                                         minSpeedDelta,
+                                         minPps,
+                                         sleepGpioPin=None,
+                                         stepsMode="Full",
+                                         enableGpioPin=None):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = InteractiveAcceleration(stepperMotor,
+                                               delayPlanner,
+                                               minSpeedDelta,
+                                               minPps,
+                                               steppingModeMultiple=BipolarStepperMotorDriver
+                                                       .RESOLUTION_MULTIPLE[stepsMode])
+        return UnipolarMotorDriver(stepperMotor=stepperMotor,
+                                   accelerationStrategy=acceleration,
+                                   directionGpioPin=directionPin,
+                                   stepGpioPin=stepPin,
+                                   navigation=navigation,
+                                   sleepGpioPin=sleepGpioPin,
+                                   stepsMode=stepsMode,
+                                   enableGpioPin=enableGpioPin)
 
 
 class StaticControllerFactory(ControllerFactory):
@@ -505,6 +600,108 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                             isProxy=isProxy,
                                             steppingCompleteEventName=steppingCompleteEventName,
                                             jobCompletionObserver=jobCompletionObserver)
+
+    def getMpCustomTorqueCharacteristicsUnipolarDriverWith(self,
+                                                           queue,
+                                                           sharedMemory,
+                                                           isProxy,
+                                                           jobCompletionObserver,
+                                                           stepperMotor,
+                                                           directionPin,
+                                                           stepPin,
+                                                           transformations=None,
+                                                           sleepGpioPin=None,
+                                                           stepsMode="Full",
+                                                           enableGpioPin=None,
+                                                           steppingCompleteEventName="steppingComplete"):
+
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = CustomAccelerationPerPps(stepperMotor,
+                                                delayPlanner,
+                                                transformations=transformations,
+                                                steppingModeMultiple=BipolarStepperMotorDriver
+                                                        .RESOLUTION_MULTIPLE[stepsMode])
+
+        driver = UnipolarMotorDriver(stepperMotor=stepperMotor,
+                                     accelerationStrategy=acceleration,
+                                     directionGpioPin=directionPin,
+                                     stepGpioPin=stepPin,
+                                     navigation=navigation,
+                                     sleepGpioPin=sleepGpioPin,
+                                     stepsMode=stepsMode,
+                                     enableGpioPin=enableGpioPin,
+                                     jobQueue=queue,
+                                     sharedMemory=sharedMemory,
+                                     isProxy=isProxy,
+                                     steppingCompleteEventName=steppingCompleteEventName,
+                                     jobCompletionObserver=jobCompletionObserver)
+
+        return driver
+
+    def getMpLinearUnipolarDriverWith(self,
+                                      queue,
+                                      sharedMemory,
+                                      isProxy,
+                                      jobCompletionObserver,
+                                      stepperMotor,
+                                      directionPin,
+                                      stepPin,
+                                      sleepGpioPin=None,
+                                      stepsMode="Full",
+                                      enableGpioPin=None,
+                                      steppingCompleteEventName="steppingComplete"):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = LinearAcceleration(stepperMotor,
+                                          delayPlanner,
+                                          steppingModeMultiple=BipolarStepperMotorDriver
+                                                  .RESOLUTION_MULTIPLE[stepsMode])
+        return UnipolarMotorDriver(stepperMotor=stepperMotor,
+                                   accelerationStrategy=acceleration,
+                                   directionGpioPin=directionPin,
+                                   stepGpioPin=stepPin,
+                                   navigation=navigation,
+                                   sleepGpioPin=sleepGpioPin,
+                                   stepsMode=stepsMode,
+                                   enableGpioPin=enableGpioPin,
+                                   jobQueue=queue,
+                                   sharedMemory=sharedMemory,
+                                   isProxy=isProxy,
+                                   steppingCompleteEventName=steppingCompleteEventName,
+                                   jobCompletionObserver=jobCompletionObserver)
+
+    def getMpExponentialUnipolarDriverWith(self,
+                                           queue,
+                                           sharedMemory,
+                                           isProxy,
+                                           jobCompletionObserver,
+                                           stepperMotor,
+                                           directionPin,
+                                           stepPin,
+                                           sleepGpioPin=None,
+                                           stepsMode="Full",
+                                           enableGpioPin=None,
+                                           steppingCompleteEventName="steppingComplete"):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = ExponentialAcceleration(stepperMotor,
+                                               delayPlanner,
+                                               steppingModeMultiple=BipolarStepperMotorDriver
+                                                       .RESOLUTION_MULTIPLE[stepsMode])
+        return UnipolarMotorDriver(stepperMotor=stepperMotor,
+                                   accelerationStrategy=acceleration,
+                                   directionGpioPin=directionPin,
+                                   stepGpioPin=stepPin,
+                                   navigation=navigation,
+                                   sleepGpioPin=sleepGpioPin,
+                                   stepsMode=stepsMode,
+                                   enableGpioPin=enableGpioPin,
+                                   jobQueue=queue,
+                                   sharedMemory=sharedMemory,
+                                   isProxy=isProxy,
+                                   steppingCompleteEventName=steppingCompleteEventName,
+                                   jobCompletionObserver=jobCompletionObserver)
 
     class Unpacker:
         def __init__(self, factoryOrders, queues: list, sharedMemories: list, eventMultiprocessObserver):
