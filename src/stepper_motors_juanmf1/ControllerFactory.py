@@ -10,7 +10,7 @@ from stepper_motors_juanmf1.AccelerationStrategy import (LinearAcceleration, Acc
                                                          InteractiveAcceleration, DelayPlanner)
 
 from adafruit_motor.stepper import StepperMotor as AdafruitStepperDriver
-from stepper_motors_juanmf1.AdafruitMotorAdapter import AdafruitStepperAdapter
+from stepper_motors_juanmf1.AdafruitControllerAdapter import AdafruitStepperAdapter
 
 from stepper_motors_juanmf1.Controller import (DRV8825MotorDriver, TMC2209StandaloneMotorDriver,
                                                DriverSharedPositionStruct, MotorDriver, BipolarStepperMotorDriver)

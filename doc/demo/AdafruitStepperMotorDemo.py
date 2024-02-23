@@ -5,7 +5,7 @@ and all it's acceleration strategies.
 import board
 from adafruit_motor import stepper
 from adafruit_motorkit import MotorKit
-from stepper_motors_juanmf1.AdafruitMotorAdapter import AdafruitStepperAdapter
+from stepper_motors_juanmf1.AdafruitControllerAdapter import AdafruitStepperAdapter
 from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver
 from stepper_motors_juanmf1.ControllerFactory import DynamicControllerFactory, StaticControllerFactory, \
     SynchronizedControllerFactory

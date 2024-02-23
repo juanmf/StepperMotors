@@ -227,6 +227,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                 dueControllers.clear()
                 delegatedDuePulses.clear()
                 duePulses.clear()
+                duePulsesStates.clear()
 
         except Exception as e:
             tprint(f"SOMETHING WRONG {e}")
