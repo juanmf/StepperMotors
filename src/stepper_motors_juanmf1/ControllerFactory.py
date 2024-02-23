@@ -8,6 +8,10 @@ from stepper_motors_juanmf1.AccelerationStrategy import (LinearAcceleration, Acc
                                                          CustomAccelerationPerPps, DynamicDelayPlanner,
                                                          StaticDelayPlanner,
                                                          InteractiveAcceleration, DelayPlanner)
+
+from adafruit_motor.stepper import StepperMotor as AdafruitStepperDriver
+from stepper_motors_juanmf1.AdafruitMotorAdapter import AdafruitStepperAdapter
+
 from stepper_motors_juanmf1.Controller import (DRV8825MotorDriver, TMC2209StandaloneMotorDriver,
                                                DriverSharedPositionStruct, MotorDriver, BipolarStepperMotorDriver)
 from stepper_motors_juanmf1.Navigation import (DynamicNavigation, StaticNavigation, Navigation,
@@ -322,6 +326,80 @@ class ControllerFactory:
                                    sleepGpioPin=sleepGpioPin,
                                    stepsMode=stepsMode,
                                    enableGpioPin=enableGpioPin)
+
+    def getFlatAdafruitStepperWith(self, stepperMotor, adafruitDriver: AdafruitStepperDriver, stepsMode="Full"):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = AccelerationStrategy(stepperMotor,
+                                            delayPlanner,
+                                            steppingModeMultiple=BipolarStepperMotorDriver
+                                            .RESOLUTION_MULTIPLE[stepsMode])
+        return AdafruitStepperAdapter(stepperMotor=stepperMotor,
+                                      adafruitDriver=adafruitDriver,
+                                      accelerationStrategy=acceleration,
+                                      navigation=navigation,
+                                      stepsMode=stepsMode)
+
+    def getLinearAdafruitStepperWith(self, stepperMotor, adafruitDriver: AdafruitStepperDriver,
+                                     stepsMode="Full"):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = LinearAcceleration(stepperMotor,
+                                          delayPlanner,
+                                          steppingModeMultiple=BipolarStepperMotorDriver
+                                          .RESOLUTION_MULTIPLE[stepsMode])
+        return AdafruitStepperAdapter(stepperMotor=stepperMotor,
+                                      adafruitDriver=adafruitDriver,
+                                      accelerationStrategy=acceleration,
+                                      navigation=navigation,
+                                      stepsMode=stepsMode)
+
+    def getExponentialAdafruitStepperWith(self, stepperMotor, adafruitDriver: AdafruitStepperDriver, stepsMode="Full"):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = ExponentialAcceleration(stepperMotor,
+                                               delayPlanner,
+                                               steppingModeMultiple=BipolarStepperMotorDriver
+                                               .RESOLUTION_MULTIPLE[stepsMode])
+        return AdafruitStepperAdapter(stepperMotor=stepperMotor,
+                                      adafruitDriver=adafruitDriver,
+                                      accelerationStrategy=acceleration,
+                                      navigation=navigation,
+                                      stepsMode=stepsMode)
+
+    def getCustomTorqueCharacteristicsAdafruitStepperWith(self, stepperMotor,
+                                                          adafruitDriver: AdafruitStepperDriver,
+                                                          transformations=None,
+                                                          stepsMode="Full"):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = CustomAccelerationPerPps(stepperMotor,
+                                                delayPlanner,
+                                                transformations=transformations,
+                                                steppingModeMultiple=BipolarStepperMotorDriver
+                                                .RESOLUTION_MULTIPLE[stepsMode])
+        return AdafruitStepperAdapter(stepperMotor=stepperMotor,
+                                      adafruitDriver=adafruitDriver,
+                                      accelerationStrategy=acceleration,
+                                      navigation=navigation,
+                                      stepsMode=stepsMode)
+
+    def getInteractiveAdafruitStepperWith(self, stepperMotor, minSpeedDelta, minPps,
+                                          adafruitDriver: AdafruitStepperDriver,
+                                          stepsMode="Full"):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = InteractiveAcceleration(stepperMotor,
+                                               delayPlanner,
+                                               minSpeedDelta,
+                                               minPps,
+                                               steppingModeMultiple=BipolarStepperMotorDriver
+                                               .RESOLUTION_MULTIPLE[stepsMode])
+        return AdafruitStepperAdapter(stepperMotor=stepperMotor,
+                                      adafruitDriver=adafruitDriver,
+                                      accelerationStrategy=acceleration,
+                                      navigation=navigation,
+                                      stepsMode=stepsMode)
 
 
 class StaticControllerFactory(ControllerFactory):
@@ -702,6 +780,90 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                                    isProxy=isProxy,
                                    steppingCompleteEventName=steppingCompleteEventName,
                                    jobCompletionObserver=jobCompletionObserver)
+
+    def getMpCustomTorqueCharacteristicsAdafruitStepperWith(self,
+                                                            queue,
+                                                            sharedMemory,
+                                                            isProxy,
+                                                            jobCompletionObserver,
+                                                            stepperMotor,
+                                                            adafruitStepperDriver: AdafruitStepperDriver,
+                                                            transformations=None,
+                                                            stepsMode="Full",
+                                                            steppingCompleteEventName="steppingComplete"):
+
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = CustomAccelerationPerPps(stepperMotor,
+                                                delayPlanner,
+                                                transformations=transformations,
+                                                steppingModeMultiple=BipolarStepperMotorDriver
+                                                        .RESOLUTION_MULTIPLE[stepsMode])
+
+        driver = AdafruitStepperAdapter(stepperMotor=stepperMotor,
+                                        adafruitDriver=adafruitStepperDriver,
+                                        accelerationStrategy=acceleration,
+                                        navigation=navigation,
+                                        stepsMode=stepsMode,
+                                        jobQueue=queue,
+                                        sharedMemory=sharedMemory,
+                                        isProxy=isProxy,
+                                        steppingCompleteEventName=steppingCompleteEventName,
+                                        jobCompletionObserver=jobCompletionObserver)
+
+        return driver
+
+    def getMpLinearAdafruitStepperWith(self,
+                                       queue,
+                                       sharedMemory,
+                                       isProxy,
+                                       jobCompletionObserver,
+                                       stepperMotor,
+                                       adafruitStepperDriver: AdafruitStepperDriver,
+                                       stepsMode="Full",
+                                       steppingCompleteEventName="steppingComplete"):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = LinearAcceleration(stepperMotor,
+                                          delayPlanner,
+                                          steppingModeMultiple=BipolarStepperMotorDriver
+                                                  .RESOLUTION_MULTIPLE[stepsMode])
+        return AdafruitStepperAdapter(stepperMotor=stepperMotor,
+                                      adafruitDriver=adafruitStepperDriver,
+                                      accelerationStrategy=acceleration,
+                                      navigation=navigation,
+                                      stepsMode=stepsMode,
+                                      jobQueue=queue,
+                                      sharedMemory=sharedMemory,
+                                      isProxy=isProxy,
+                                      steppingCompleteEventName=steppingCompleteEventName,
+                                      jobCompletionObserver=jobCompletionObserver)
+
+    def getMpExponentialAdafruitStepperWith(self,
+                                            queue,
+                                            sharedMemory,
+                                            isProxy,
+                                            jobCompletionObserver,
+                                            stepperMotor,
+                                            adafruitStepperDriver: AdafruitStepperDriver,
+                                            stepsMode="Full",
+                                            steppingCompleteEventName="steppingComplete"):
+        delayPlanner = self.getDelayPlanner()
+        navigation = self.getNavigation()
+        acceleration = ExponentialAcceleration(stepperMotor,
+                                               delayPlanner,
+                                               steppingModeMultiple=BipolarStepperMotorDriver
+                                                       .RESOLUTION_MULTIPLE[stepsMode])
+        return AdafruitStepperAdapter(stepperMotor=stepperMotor,
+                                      adafruitDriver=adafruitStepperDriver,
+                                      accelerationStrategy=acceleration,
+                                      navigation=navigation,
+                                      stepsMode=stepsMode,
+                                      jobQueue=queue,
+                                      sharedMemory=sharedMemory,
+                                      isProxy=isProxy,
+                                      steppingCompleteEventName=steppingCompleteEventName,
+                                      jobCompletionObserver=jobCompletionObserver)
 
     class Unpacker:
         def __init__(self, factoryOrders, queues: list, sharedMemories: list, eventMultiprocessObserver):

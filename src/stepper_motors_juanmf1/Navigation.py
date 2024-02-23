@@ -8,7 +8,7 @@ from stepper_motors_juanmf1.UnipolarController import UnipolarMotorDriver
 
 from stepper_motors_juanmf1.myMath import cmp
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
-from stepper_motors_juanmf1.Controller import MotorDriver
+from stepper_motors_juanmf1.Controller import MotorDriver, ThirdPartyAdapter
 from stepper_motors_juanmf1.EventDispatcher import EventDispatcher
 from stepper_motors_juanmf1.SortedDict import SortedDict
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
@@ -183,6 +183,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
 
     def __doGo(self, pulsingController):
         self.putPulsingController(time.monotonic_ns(), pulsingController)
+        delegatedDuePulses = []  # When no available Pins send pulse instruction to Driver.
         duePulses = []
         duePulsesStates = []
         bipolarStepPins = []
@@ -206,21 +207,25 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                     pulsingController.addDueControllerFn(duePulses,
                                                          duePulsesStates,
                                                          dueControllers,
-                                                         bipolarStepPins)
-                    duePulses.append(pulsingController.controller.stepGpioPin)
-                    dueControllers.append(pulsingController)
+                                                         bipolarStepPins,
+                                                         delegatedDuePulses)
 
-                if duePulses:
+                if duePulses or delegatedDuePulses:
                     GPIO.output(duePulses, duePulsesStates)
+                    for thirdPartyAdapter in delegatedDuePulses:
+                        thirdPartyAdapter.pulseStart()
                     self.updateSleepTimes(dueControllers, pulseTime, count=2)
                     while pulseTime + self.driverPulseTimeNs > time.monotonic_ns():
                         # Small active wait in case updateSleepTimes() didn't consume Driver's min pulse time.
                         pass
                     GPIO.output(bipolarStepPins, self.low)
+                    for thirdPartyAdapter in delegatedDuePulses:
+                        thirdPartyAdapter.pulseStop()
                     # Finish with remaining controllers after sending LOW
                     if dueControllers:
                         self.updateSleepTimes(dueControllers, pulseTime)
                 dueControllers.clear()
+                delegatedDuePulses.clear()
                 duePulses.clear()
 
         except Exception as e:
@@ -295,26 +300,48 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         def __init__(self, controller: MotorDriver, sleepTime, targetPosition, fn=None, interruptPredicate=None,
                      eventInAdvanceSteps=None, eventName="steppingComplete", high=GPIO.HIGH):
             self.controller: MotorDriver = controller
-            self.addDueControllerFn = self.addUnipolarPulses if isinstance(controller, UnipolarMotorDriver) \
-                                      else self.addBipolarPulses
+
+            if isinstance(controller, UnipolarMotorDriver):
+                self.addDueControllerFn = self.addUnipolarPulses
+            elif isinstance(controller, ThirdPartyAdapter):
+                self.addDueControllerFn = self.addAdapterPulses
+            else:
+                self.addDueControllerFn = self.addBipolarPulses
+
             self.sleepTime = sleepTime
             self.targetPosition = targetPosition
             self.fn = fn
             self.interruptPredicate = interruptPredicate
             self.eventInAdvanceSteps = eventInAdvanceSteps
             self.eventName = eventName
+
+            # Signed steps (actually pulses) relative to stepping job start, not absolute position.
             self.pulseCount = 0
             self.high = high
 
+        def pulseStart(self):
+            assert isinstance(self.controller, ThirdPartyAdapter)
+            self.controller.pulseStart(self.pulseCount)
+
+        def pulseStop(self):
+            assert isinstance(self.controller, ThirdPartyAdapter)
+            self.controller.pulseStop()
+
+        def addAdapterPulses(self, duePulses: list, duePulsesStates: list, dueControllers: list,
+                             bipolarStepPins: list, delegatedDuePulses: list):
+            dueControllers.append(self)
+            delegatedDuePulses.append(self)
+            self.pulseCount += self.controller.accelerationStrategy.realDirection
+
         def addUnipolarPulses(self, duePulses: list, duePulsesStates: list, dueControllers: list,
-                              bipolarStepPins: list):
+                              bipolarStepPins: list, delegatedDuePulses):
             dueControllers.append(self)
             duePulses.extend(self.controller.stepGpioPin)
             duePulsesStates.extend(self.controller.sequence.getStepSequence(self.pulseCount))
             self.pulseCount += self.controller.accelerationStrategy.realDirection
 
         def addBipolarPulses(self, duePulses: list, duePulsesStates, dueControllers: list,
-                             bipolarStepPins: list):
+                             bipolarStepPins: list, delegatedDuePulses):
             dueControllers.append(self)
             duePulses.append(self.controller.stepGpioPin)
             bipolarStepPins.append(self.controller.stepGpioPin)

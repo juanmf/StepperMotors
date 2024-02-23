@@ -15,6 +15,20 @@ from stepper_motors_juanmf1.myMath import sign
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 
+class ThirdPartyAdapter:
+    """
+    Marker interface to signal that this Controller's pins ot protected attributes can't be accessed safely.
+    Use High level API methods instead.
+    """
+
+    @abstractmethod
+    def pulseStart(self, stepRelativeToJobStart=None):
+        pass
+
+    @abstractmethod
+    def pulseStop(self):
+        pass
+
 class DriverSharedPositionStruct(ctypes.Structure):
     """
     In Multiprocessing, position will be shared through these fields.
