@@ -10,7 +10,7 @@ class AccelerationStrategy:
     Base Strategy class implements flat (min) speed.
     """
 
-    def __init__(self, stepperMotor: StepperMotor, delayPlanner, rampSteps=None, steppingModeMultiple=1):
+    def __init__(self, stepperMotor: StepperMotor, delayPlanner, steppingModeMultiple, rampSteps=None):
         """
         :param stepperMotor: Stepper to take parameters from, like [min/max]PPS and so on.
         :param delayPlanner: delayPlanner to use to compute sleep time between steps as motor ramps up/down & while
@@ -118,7 +118,7 @@ class LinearAcceleration(AccelerationStrategy):
     minimum torque (wasteful).
     """
 
-    def __init__(self, stepperMotor: StepperMotor, delayPlanner, rampSteps=25, steppingModeMultiple=1):
+    def __init__(self, stepperMotor: StepperMotor, delayPlanner, steppingModeMultiple, rampSteps=25):
         super().__init__(stepperMotor, delayPlanner, rampSteps, steppingModeMultiple)
         self.sleepDeltaUs = (self.maxSleepTimeUs - self.minSleepTimeUs) / rampSteps
         self.currentSleepTimeUs = self.maxSleepTimeUs
@@ -158,8 +158,8 @@ class ExponentialAcceleration(AccelerationStrategy):
     When you move "a" bar to change currentPPS the speedUp nd speedDown curves converge to maxPPS when a -> maxPPS meaning
       no acceleration.
     """
-    def __init__(self, stepperMotor: StepperMotor, delayPlanner, initialIncrementFactor=2, steppingModeMultiple=1):
-        super().__init__(stepperMotor, delayPlanner, None, steppingModeMultiple=steppingModeMultiple)
+    def __init__(self, stepperMotor: StepperMotor, delayPlanner, steppingModeMultiple, initialIncrementFactor=2):
+        super().__init__(stepperMotor, delayPlanner, steppingModeMultiple, None)
         pps = self.maxPps
         self.stepsToBreakCache = [pps]
         # With this formula, breaking takes more steps than accelerating. using breaking to determine rampSteps
@@ -208,14 +208,14 @@ class CustomAccelerationPerPps(AccelerationStrategy):
     Alternatively accepts an explicit set of multipliers to apply to current PPS as a proxy to instantaneous torque
     see `transformations`.
     """
-    def __init__(self, stepperMotor: StepperMotor, delayPlanner, transformations=None, steppingModeMultiple=1):
+    def __init__(self, stepperMotor: StepperMotor, delayPlanner, steppingModeMultiple, transformations=None):
         super().__init__(stepperMotor, delayPlanner, steppingModeMultiple=steppingModeMultiple)
         """
         Curve of optimal acceleration.
         array of tuples with max speed boost at given PPS starting from stepperMotor.MIN_PPS 
         [(minPPS, speedIncrement_1), (minPPS * speedIncrement_1, speedIncrement_2), ..., (maxPPS, 0)]
         """
-        self.transformations = transformations if transformations is not None else stepperMotor.TORQUE_CURVE
+        self.transformations = list(transformations) if transformations is not None else list(stepperMotor.TORQUE_CURVE)
         if steppingModeMultiple != 1:
             correctedTransformations = []
             for pps, increment in self.transformations:
@@ -370,8 +370,8 @@ class InteractiveAcceleration(AccelerationStrategy):
     AccelerationStrategy that enables manually setting speed (PPS) used for stress tests in
     :func:`~ Benchmark.benchmarkMotor`.
     """
-    def __init__(self, stepperMotor, delayPlanner, minSpeedDelta, minPPS, steppingModeMultiple=1):
-        super().__init__(stepperMotor, delayPlanner, 25, steppingModeMultiple=steppingModeMultiple)
+    def __init__(self, stepperMotor, delayPlanner, steppingModeMultiple, minSpeedDelta, minPPS):
+        super().__init__(stepperMotor, delayPlanner, steppingModeMultiple, 25)
         self.minSpeedDelta = int(minSpeedDelta / steppingModeMultiple)
         self.speedDelta = self.minSpeedDelta
         self.minPps = int(minPPS / steppingModeMultiple)

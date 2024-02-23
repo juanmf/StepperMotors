@@ -7,6 +7,45 @@ from stepper_motors_juanmf1.StepperMotor import StepperMotor
 
 class UnipolarMotorDriver(BipolarStepperMotorDriver):
 
+    def __init__(self, *,
+                 stepperMotor: StepperMotor,
+                 accelerationStrategy: AccelerationStrategy,
+                 directionGpioPin,
+                 # For Unipolar drivers it's a list of 2-4 pins.
+                 stepGpioPin,
+                 navigation,
+                 # LOW = enabled; HIGH chip disabled
+                 enableGpioPin=None,
+                 # LOW = sleep mode; HIGH = chip active, Works for StandBy in TB6612 for instance
+                 sleepGpioPin=None,
+                 useHoldingTorque=None,
+                 stepsMode=BipolarStepperMotorDriver.DEFAULT_STEPPING_MODE,
+                 jobQueue=None,
+                 sharedMemory=None,
+                 isProxy=False,
+                 steppingCompleteEventName="steppingComplete",
+                 jobCompletionObserver=None,
+                 workerName=None):
+
+        assert stepsMode in UnipolarMotorDriver.Sequence.SUPPORTED_MICROSTEPS
+        super().__init__(stepperMotor=stepperMotor,
+                         accelerationStrategy=accelerationStrategy,
+                         navigation=navigation,
+                         directionGpioPin=directionGpioPin,
+                         stepGpioPin=stepGpioPin,
+                         sleepGpioPin=sleepGpioPin,
+                         enableGpioPin=enableGpioPin,
+                         useHoldingTorque=useHoldingTorque,
+                         stepsMode=stepsMode,
+                         steppingCompleteEventName=steppingCompleteEventName,
+                         jobQueue=jobQueue,
+                         workerName=workerName,
+                         sharedMemory=sharedMemory,
+                         isProxy=isProxy,
+                         jobCompletionObserver=jobCompletionObserver)
+
+        self.sequence = UnipolarMotorDriver.Sequence(UnipolarMotorDriver.Sequence.FULL)
+
     def setSleepMode(self, sleepOn=False):
         """
         Active LOW, so if sleepOn True, pin is LOW. if sleepOn False, pin is HIGH.
@@ -37,41 +76,6 @@ class UnipolarMotorDriver(BipolarStepperMotorDriver):
     def pulseStop(self):
         # Not in Unipolar
         pass
-
-    def __init__(self, *,
-                 stepperMotor: StepperMotor,
-                 accelerationStrategy: AccelerationStrategy,
-                 directionGpioPin,
-                 # For Unipolar drivers it's a list of 2-4 pins.
-                 stepGpioPin,
-                 navigation,
-                 # LOW = enabled; HIGH chip disabled
-                 enableGpioPin=None,
-                 # LOW = sleep mode; HIGH = chip active, Works for StandBy in TB6612 for instance
-                 sleepGpioPin=None,
-                 stepsMode="Full",
-                 jobQueue=None,
-                 sharedMemory=None,
-                 isProxy=False,
-                 steppingCompleteEventName="steppingComplete",
-                 jobCompletionObserver=None):
-
-        assert stepsMode in UnipolarMotorDriver.Sequence.SUPPORTED_MICROSTEPS
-        super().__init__(stepperMotor=stepperMotor,
-                         accelerationStrategy=accelerationStrategy,
-                         navigation=navigation,
-                         directionGpioPin=directionGpioPin,
-                         stepGpioPin=stepGpioPin,
-                         sleepGpioPin=sleepGpioPin,
-                         enableGpioPin=enableGpioPin,
-                         stepsMode=stepsMode,
-                         steppingCompleteEventName=steppingCompleteEventName,
-                         jobQueue=jobQueue,
-                         sharedMemory=sharedMemory,
-                         isProxy=isProxy,
-                         jobCompletionObserver=jobCompletionObserver)
-
-        self.sequence = UnipolarMotorDriver.Sequence(UnipolarMotorDriver.Sequence.FULL)
 
     class Sequence:
 

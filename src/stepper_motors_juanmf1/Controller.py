@@ -167,6 +167,8 @@ class BipolarStepperMotorDriver(MotorDriver):
                            '1/128': 1 / 128,
                            '1/256': 1 / 256}
 
+    DEFAULT_STEPPING_MODE = 'Full'
+
     PULSE_TIME_MICROS = None
     """
     Many sites will show 50% duty cycle from controller code. Drivers actually take short signal pulses.
@@ -195,7 +197,7 @@ class BipolarStepperMotorDriver(MotorDriver):
                  stepGpioPin,
                  navigation,
                  sleepGpioPin=None,
-                 stepsMode="Full",
+                 stepsMode=DEFAULT_STEPPING_MODE,
                  modeGpioPins=None,
                  enableGpioPin=None,
                  workerName=None,
@@ -232,6 +234,8 @@ class BipolarStepperMotorDriver(MotorDriver):
         [GPIO_26]   37 * * 38 [GPIO_20]
         [GND]       39 * * 40 [GPIO_21]
         """
+        assert stepperMotor and accelerationStrategy and navigation
+        assert isinstance(self, ThirdPartyAdapter) or (directionGpioPin and stepGpioPin)
         super().__init__(stepperMotor=stepperMotor,
                          directionGpioPin=directionGpioPin,
                          stepGpioPin=stepGpioPin,
@@ -541,7 +545,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                   '1/16': (0, 0, 1),
                   '1/32': (1, 0, 1)}
 
-
     # DRV8825 uses min 10 microseconds HIGH for STEP pin.
     # Raspberry Pi sleeps (in % of desired time) increasingly longer the lower the time goes.
     # So in actuality this will sleep about 20uS
@@ -558,11 +561,13 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                  navigation,
                  # LOW = sleep mode; HIGH = chip active
                  sleepGpioPin=None,
-                 stepsMode="Full",
+                 stepsMode=BipolarStepperMotorDriver.DEFAULT_STEPPING_MODE,
+                 useHoldingTorque=None,
                  modeGpioPins=None,
                  # LOW = enabled; HIGH chip disabled
                  enableGpioPin=None,
                  jobQueue=None,
+                 workerName=None,
                  sharedMemory=None,
                  isProxy=False,
                  steppingCompleteEventName="steppingComplete",
@@ -589,6 +594,8 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         @param modeGpioPins: [MODE_0..2]
         @param enableGpioPin: [EN] LOW = enabled; HIGH chip disabled
         """
+        assert stepsMode == self.DEFAULT_STEPPING_MODE or modeGpioPins
+
         super().__init__(stepperMotor=stepperMotor,
                          accelerationStrategy=accelerationStrategy,
                          navigation=navigation,
@@ -596,10 +603,12 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                          stepGpioPin=stepGpioPin,
                          sleepGpioPin=sleepGpioPin,
                          enableGpioPin=enableGpioPin,
+                         useHoldingTorque=useHoldingTorque,
                          stepsMode=stepsMode,
                          modeGpioPins=modeGpioPins,
                          steppingCompleteEventName=steppingCompleteEventName,
                          jobQueue=jobQueue,
+                         workerName=workerName,
                          sharedMemory=sharedMemory,
                          isProxy=isProxy,
                          jobCompletionObserver=jobCompletionObserver)
@@ -697,6 +706,8 @@ class TMC2209StandaloneMotorDriver(BipolarStepperMotorDriver):
                   '1/64':  (0, 1),
                   '1/16':  (1, 1)}
 
+    DEFAULT_STEPPING_MODE = '1/8'
+
     # DRV8825 uses min 10 microseconds HIGH for STEP pin.
     # Raspberry Pi sleeps (in % of desired time) increasingly longer the lower the time goes.
     # So in actuality this will sleep about 20uS
@@ -714,8 +725,11 @@ class TMC2209StandaloneMotorDriver(BipolarStepperMotorDriver):
                  directionGpioPin,
                  stepGpioPin,
                  navigation,
+                 # LOW = enabled; HIGH chip disabled
+                 enableGpioPin=None,
+                 useHoldingTorque=None,
                  # LOW = sleep mode; HIGH = chip active
-                 stepsMode="1/8",
+                 stepsMode=DEFAULT_STEPPING_MODE,
                  modeGpioPins=None,
                  spreadGpioPin=None,
                  diagGPIOPin=None,
@@ -725,23 +739,27 @@ class TMC2209StandaloneMotorDriver(BipolarStepperMotorDriver):
                  # Vref range：0.2V – 2.2V
                  vRefAnalogPin=None,
                  stepsPerIndexPulse=4,
-                 # LOW = enabled; HIGH chip disabled
-                 enableGpioPin=None,
                  jobQueue=None,
+                 workerName=None,
                  sharedMemory=None,
                  isProxy=False,
                  steppingCompleteEventName="steppingComplete",
                  jobCompletionObserver=None):
+
+        assert stepsMode == self.DEFAULT_STEPPING_MODE or modeGpioPins
+
         super().__init__(stepperMotor=stepperMotor,
                          accelerationStrategy=accelerationStrategy,
                          navigation=navigation,
                          directionGpioPin=directionGpioPin,
                          stepGpioPin=stepGpioPin,
                          enableGpioPin=enableGpioPin,
+                         useHoldingTorque=useHoldingTorque,
                          stepsMode=stepsMode,
                          modeGpioPins=modeGpioPins,
                          steppingCompleteEventName=steppingCompleteEventName,
                          jobQueue=jobQueue,
+                         workerName=workerName,
                          sharedMemory=sharedMemory,
                          isProxy=isProxy,
                          jobCompletionObserver=jobCompletionObserver)
