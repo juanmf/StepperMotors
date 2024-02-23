@@ -8,7 +8,7 @@ from stepper_motors_juanmf1.StepperMotor import StepperMotor
 from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver, ThirdPartyAdapter
 
 
-class AdafruitStepperAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter):
+class AdafruitStepperDriverAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter):
 
     CW = GPIO.HIGH  # Clockwise Rotation
     CCW = GPIO.LOW  # Counterclockwise Rotation
@@ -26,6 +26,8 @@ class AdafruitStepperAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter):
                   '1/128': 128,
                   }
 
+    DEFAULT_STEPPING_MODE = '1/16'
+
     # DRV8825 uses min 10 microseconds HIGH for STEP pin.
     # Raspberry Pi sleeps (in % of desired time) increasingly longer the lower the time goes.
     # So in actuality this will sleep about 20uS
@@ -39,14 +41,16 @@ class AdafruitStepperAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter):
                  stepperMotor: StepperMotor,
                  accelerationStrategy: AccelerationStrategy,
                  navigation,
-                 stepsMode="Full",
+                 stepsMode=DEFAULT_STEPPING_MODE,
                  useHoldingTorque=True,
                  jobQueue=None,
+                 workerName=None,
                  sharedMemory=None,
                  isProxy=False,
                  steppingCompleteEventName="steppingComplete",
                  jobCompletionObserver=None):
 
+        assert adafruitDriver and stepperMotor and accelerationStrategy and navigation
         # Adafruit allows for any pair > 2 microsteps, Here it's limited to 2**n <= 128
         assert not adafruitDriver._microsteps or adafruitDriver._microsteps == self.RESOLUTION[stepsMode], \
             "When configuring microsteps in Adafruit, need to make is consistent with stepsMode provided."
@@ -60,6 +64,7 @@ class AdafruitStepperAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter):
                          stepsMode=stepsMode,
                          steppingCompleteEventName=steppingCompleteEventName,
                          jobQueue=jobQueue,
+                         workerName=workerName,
                          sharedMemory=sharedMemory,
                          isProxy=isProxy,
                          jobCompletionObserver=jobCompletionObserver)
