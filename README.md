@@ -304,11 +304,8 @@ for CLI Benchmark, you need download sources and cd to `src/stepper_motors_juanm
 start gpio demon on your Raspberry Pi and start benchmark passing step and direction pins per your setup.
 ```
 $ cd src/stepper_motors_juanmf1
-$ sudo pigpiod -s 10 -t 0
 $ python3 Benchmark.py 23 24
 
-# you can use `netstat netstat -tulpn` to check pigpiod demon 
-#  is listening, in my case on `tcp6       0      0 :::8888` 
 ```
 Annotated (`# <== `) output:
 #### Todo: update benchmark 0utput
@@ -337,9 +334,7 @@ if __name__ == '__main__':
 ```
 usage:
 ```commandline
-$ sudo pigpiod -s 10 -t 0 
 $ python3 ./Training.py bench
-
 ```
 
 ### SynchronizedNavigation
@@ -757,12 +752,12 @@ $ git pull
 $ rm ./dist/*
 $ python3 -m build
 * Creating venv isolated environment...
-* Installing packages in isolated environment... (RPi.GPIO, hatchling, numpy, pigpio, sshkeyboard)
+* Installing packages in isolated environment... (RPi.GPIO, hatchling, numpy, sshkeyboard)
 * Getting build dependencies for sdist...
 * Building sdist...
 * Building wheel from sdist
 * Creating venv isolated environment...
-* Installing packages in isolated environment... (RPi.GPIO, hatchling, numpy, pigpio, sshkeyboard)
+* Installing packages in isolated environment... (RPi.GPIO, hatchling, numpy, sshkeyboard)
 * Getting build dependencies for wheel...
 * Building wheel...
 Successfully built stepper_motors_juanmf1-0.0.7.tar.gz and stepper_motors_juanmf1-0.0.7-py3-none-any.whl
@@ -809,6 +804,5 @@ function updateMotorLib() {
 
 
 alias myProject="cd ~/projects/<consumerProject>/src && source ../env/bin/activate && python3 Main.py"
-alias gpio="sudo netstat -tulpn | grep pigpiod"
 ```
             
