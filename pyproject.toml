@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "sshkeyboard", "RPi.GPIO", "pigpio", "numpy", "multiprocess", "adafruit-circuitpython-motorkit"]
+requires = ["hatchling", "sshkeyboard", "RPi.GPIO", "numpy", "multiprocess", "adafruit-circuitpython-motorkit"]
 build-backend = "hatchling.build"
 
 [project]

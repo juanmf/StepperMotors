@@ -5,7 +5,6 @@ import time
 from typing import Callable
 
 from RPi import GPIO
-import pigpio
 
 from stepper_motors_juanmf1.AccelerationStrategy import AccelerationStrategy
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
@@ -39,9 +38,6 @@ class DriverSharedPositionStruct(ctypes.Structure):
 
 # Todo: migrate to https://pypi.org/project/python-periphery/
 class MotorDriver(BlockingQueueWorker):
-    """
-    Unipolar drivers not implemented, e.g. ULN2003 not supported.
-    """
     INSTANCES_COUNT = 0
     PULSE_TIME_MICROS = None
 
@@ -179,17 +175,6 @@ class BipolarStepperMotorDriver(MotorDriver):
     Only tested with DRV8825 but LOW pulse is also possible on HIGH background.
     """
 
-    pi = pigpio.pi()
-    """
-    Connect to pigpiod daemon
-    # Todo: check that "-s" still applies. think it was important for PWM(), not used now.
-    Important: use -s option to mode 10 $> sudo pigpiod -s 10 -t 0 (or find the right -s <number>)
-    Go back to steps per ramp level waveforms if steps are missed.
-    "if you can control multiple stepper motors.The short answer is yes but it depends on the type of
-    precision and timing you need.For example CNC or 3D printing would probably require a dedicated controller.
-    Please take a look at PyCNC. Otherwise, you are only limited by the number of available GPIO pins.
-    """
-
     def __init__(self, *,
                  stepperMotor: StepperMotor,
                  accelerationStrategy: AccelerationStrategy,
@@ -295,8 +280,7 @@ class BipolarStepperMotorDriver(MotorDriver):
 
         if self.modeGpioPins is not None:
             GPIO.setup(self.modeGpioPins, GPIO.OUT)
-            for i in range(len(self.modeGpioPins)):
-                self.pi.write(self.modeGpioPins[i], self.RESOLUTION[stepsMode][i])
+            GPIO.output(self.modeGpioPins, self.RESOLUTION[stepsMode])
             self.steppingModeMultiple = self.RESOLUTION_MULTIPLE[stepsMode]
 
     def _oneTimeInit(self):
@@ -596,8 +580,6 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         @param modeGpioPins: [MODE_0..2]
         @param enableGpioPin: [EN] LOW = enabled; HIGH chip disabled
         """
-        assert stepsMode == self.DEFAULT_STEPPING_MODE or modeGpioPins
-
         super().__init__(stepperMotor=stepperMotor,
                          accelerationStrategy=accelerationStrategy,
                          navigation=navigation,
@@ -616,6 +598,10 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
                          jobCompletionObserver=jobCompletionObserver)
         tprint(f"sleepPin: {self.sleepGpioPin}.")
         tprint(f"useHOldingToruqe: {self.useHoldingTorque}")
+
+        if not(stepsMode == self.DEFAULT_STEPPING_MODE or modeGpioPins):
+            tprint(f"Warning: {workerName} needs modeGpioPins set unless it's set by hardware."
+                   "stepsMode does not match default stepping Mode")
 
     def setSleepMode(self, sleepOn=False):
         """
@@ -750,9 +736,6 @@ class TMC2209StandaloneMotorDriver(BipolarStepperMotorDriver):
                  isProxy=False,
                  steppingCompleteEventName="steppingComplete",
                  jobCompletionObserver=None):
-
-        assert stepsMode == self.DEFAULT_STEPPING_MODE or modeGpioPins
-
         super().__init__(stepperMotor=stepperMotor,
                          accelerationStrategy=accelerationStrategy,
                          navigation=navigation,
@@ -768,6 +751,10 @@ class TMC2209StandaloneMotorDriver(BipolarStepperMotorDriver):
                          sharedMemory=sharedMemory,
                          isProxy=isProxy,
                          jobCompletionObserver=jobCompletionObserver)
+
+        if not(stepsMode == self.DEFAULT_STEPPING_MODE or modeGpioPins):
+            tprint(f"Warning: {workerName} needs modeGpioPins set unless it's set by hardware."
+                   "stepsMode does not match default stepping Mode")
 
         self.spreadGpioPin = spreadGpioPin
 
