@@ -79,7 +79,6 @@ class ControllerBuilder:
         if fromBuilder:
             self.copyFromBuilder(fromBuilder)
 
-
     def copyFromBuilder(self, fromBuilder: 'ControllerBuilder') -> 'ControllerBuilder':
         """
         Only copy values that would not cause conflict. e.g. skipping pins.
@@ -573,6 +572,7 @@ class SynchronizedControllerFactory(ControllerFactory):
     def addNavigationStyle(self, builder: ControllerBuilder):
         return builder.withNavigationStyleSynchronized()
 
+
 class MultiProcessingControllerFactory(SynchronizedControllerFactory):
 
     def __init__(self):
@@ -586,8 +586,8 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         self._clientMultiprocessObservers = []
         return self
 
-    def withDriver(self, multiprocessObserver: MultiprocessObserver,
-                   factoryFnReference: Callable, *args, **kwargs) -> 'MultiProcessingControllerFactory':
+    def withDriver(self, factoryFnReference: Callable, multiprocessObserver: MultiprocessObserver = None,
+                   *args, **kwargs) -> 'MultiProcessingControllerFactory':
         """
 
         @param factoryFnReference: any of MultiProcessingControllerFactory.getMp** methods.
@@ -600,8 +600,20 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         self._clientMultiprocessObservers.append(multiprocessObserver)
         return self
 
-    def spawn(self):
-        syncNavigationCountDownLatch = BasicSynchronizedNavigation().getCountDownLatch(default=Value('i', 0))
+    def spawn(self, withBasicSynchronizedNavigationMultitonKey=0):
+        """
+        @param withBasicSynchronizedNavigationMultitonKey: In case you need to coordinate a group of motors per
+                                                           process, they'll need one instance of
+                                                           BasicSynchronizedNavigation each to avoid conflicts with the
+                                                           latch. MainProcess will have keyed instances, Child process
+                                                           one instance each.
+        @return:
+        """
+        syncNavigationCountDownLatch = (BasicSynchronizedNavigation(
+                    newMultitonKey=withBasicSynchronizedNavigationMultitonKey)
+                .getCountDownLatch(default=Value('i', 0)))
+        if isinstance(syncNavigationCountDownLatch, BasicSynchronizedNavigation.CountDownLatch):
+            raise RuntimeError("BasicSynchronizedNavigation.CountDownLatch already initialized as mono-process")
 
         """
         @return: A list of proxy drivers you can use on MainProcess to send stepping jobs to counterpart drivers in
@@ -630,7 +642,7 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         proxies = self.Unpacker.doUnpack(self._factoryOrders, queues, sharedMemories, isProxy=True)
         jobCompletionObservers = [driver.jobCompletionObserver for driver in proxies]
         unpacker = self.Unpacker(self._factoryOrders, queues, sharedMemories, eventsMultiprocessObserver)
-        childProcess = Process(target=unpacker.unpack, args=(jobCompletionObservers,))
+        childProcess = Process(target=unpacker.unpack, args=(jobCompletionObservers, syncNavigationCountDownLatch))
         childProcess.daemon = True
         flush_streams_if_not_empty()
         childProcess.start()
@@ -856,18 +868,16 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
             self.multiprocessObserver = eventMultiprocessObserver
             self.eventDispatcher = None
 
-        def unpack(self, jobCompletionObservers):
+        def unpack(self, jobCompletionObservers, syncNavigationCountDownLatch):
             """
             In new process, build Drivers
-            @param factoryOrders:
-            @param queues:
-            @param sharedMemory:
             @return:
             """
             print(f"Unpacking in child process!! {self.factoryOrders} {self.queues} {self.sharedMemories}")
             # Removing Singletons instances in case its state was cloned from Parent Process:
             EventDispatcher._instance = None
-            BasicSynchronizedNavigation._instance = None
+            BasicSynchronizedNavigation._instance = {}
+            BasicSynchronizedNavigation(countDownLatch=syncNavigationCountDownLatch)
             DynamicDelayPlanner.Rest._instance = None
             DynamicDelayPlanner.Steady._instance = None
             DynamicDelayPlanner.RampingUp._instance = None
