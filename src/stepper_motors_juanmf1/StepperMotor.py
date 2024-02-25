@@ -358,7 +358,7 @@ class GenericStepper(StepperMotor):
             self.minSleepTime = stepperMotor.getMinSleepTime()
             self.maxSleepTime = stepperMotor.getMaxSleepTime()
             self.spr = stepperMotor.getSpr()
-            self.torqueCurve = stepperMotor.getTorqueCurve()
+            self.torqueCurve = list(stepperMotor.getTorqueCurve())
             return self
 
         def withSpr(self, spr):

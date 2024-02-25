@@ -150,15 +150,16 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
     just have a set of independent drivers timing their pulses to their convenience. This Navigation ensures steps are
     locked into a rithm.
     """
-    _instance = None
+    _instance = {}
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, high=GPIO.HIGH, low=GPIO.LOW, countDownLatch=None, newMultitonKey=0):
         """
         Singleton
         """
-        if not cls._instance:
-            cls._instance = super(BasicSynchronizedNavigation, cls).__new__(cls, *args, **kwargs)
-        return cls._instance
+        if newMultitonKey not in cls._instance:
+            instance = super(BasicSynchronizedNavigation, cls).__new__(cls, high, low, countDownLatch, newMultitonKey)
+            cls._instance[newMultitonKey] = instance
+        return cls._instance[newMultitonKey]
 
     class CountDownLatch:
         """
@@ -167,7 +168,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         def __init__(self):
             self.value = 0
 
-    def __init__(self, high=GPIO.HIGH, low=GPIO.LOW, countDownLatch=None):
+    def __init__(self, high=GPIO.HIGH, low=GPIO.LOW, countDownLatch=None, newMultitonKey=0):
         BlockingQueueWorker.__init__(self, self.__doGo, jobQueueMaxSize=4, workerName="SynchronizedNavigation")
         Navigation.__init__(self)
         # {startTimNs: [(controller, sleepTime), ...]}.
@@ -178,6 +179,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         self.upPins = []
         self.eventDispatcher = EventDispatcher.instance()
         self.countDownLatch = countDownLatch
+        self.newMultitonKey = newMultitonKey
 
     def getCountDownLatch(self, default: CountDownLatch or Value = None):
         if self.countDownLatch is None:

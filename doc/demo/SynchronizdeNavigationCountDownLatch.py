@@ -1,8 +1,8 @@
 import time
 
-from stepper_motors_juanmf1.ControllerFactory import ControllerBuilder
+from stepper_motors_juanmf1.ControllerFactory import ControllerBuilder, MultiProcessingControllerFactory
 from stepper_motors_juanmf1.Navigation import BasicSynchronizedNavigation
-from stepper_motors_juanmf1.StepperMotor import Nema17_42Ncm_17HS4401, PG35S_D48_HHC2
+from stepper_motors_juanmf1.StepperMotor import Nema17_42Ncm_17HS4401, PG35S_D48_HHC2, GenericStepper
 
 motor1 = PG35S_D48_HHC2(loaded=True)
 motor2 = Nema17_42Ncm_17HS4401(loaded=True)
@@ -27,3 +27,47 @@ navigation.setCountDown(2)
 controller1.signedSteps(100)
 time.sleep(0.5)
 controller2.signedSteps(1600)
+
+"""
+Multiprocess presents some challenges.
+You'll need one BasicSynchronizedNavigation instance in Main process per each child process.
+Each child process will hae only one singleton.
+This is worked around by making BasicSynchronizedNavigation a keyed multiton.
+"""
+
+nav1 = BasicSynchronizedNavigation(newMultitonKey=0)
+nav2 = BasicSynchronizedNavigation(newMultitonKey=1)
+
+motor1_1 = Nema17_42Ncm_17HS4401(loaded=True)
+motor1_2 = GenericStepper.Builder().copy(motor1)
+motor2_1 = Nema17_42Ncm_17HS4401(loaded=True)
+motor2_2 = GenericStepper(minPps=200, maxPps=4000, minSleepTime=1/4000, maxSleepTime=1/200)
+
+controllerFactory = MultiProcessingControllerFactory()
+# Child Process 1
+driver1_1, driver1_2 = (controllerFactory.setUpProcess()
+                        # Todo: Make sure multiProcessObserver can be None
+                        .withDriver(factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
+                                    stepperMotor=motor1_1, directionPin=13, stepPin=19, sleepGpioPin=12)
+                        .withDriver(factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
+                                    stepperMotor=motor1_1, directionPin=8, stepPin=25, sleepGpioPin=1)
+                        .spawn(withBasicSynchronizedNavigationMultitonKey=0))  # Navigation to use
+
+# Child Process 2
+# Didn't check pins bellow
+driver2_1, driver2_2 = (controllerFactory.setUpProcess()
+                        # Todo: Make sure multiProcessObserver can be None
+                        .withDriver(factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
+                                    stepperMotor=motor1_1, directionPin=14, stepPin=20, sleepGpioPin=15)
+                        .withDriver(factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
+                                    stepperMotor=motor1_1, directionPin=9, stepPin=21, sleepGpioPin=2)
+                        .spawn(withBasicSynchronizedNavigationMultitonKey=1))  # Navigation to use
+
+nav1.setCountDown(2)
+driver1_1.signedSteps(100)
+driver2_1.signedSteps(200)  # should run immediately
+
+time.sleep(0.5)
+driver1_2.signedSteps(100)  # starts driver1_1 & driver1_2 together, resets counter.
+
+
