@@ -79,7 +79,8 @@ class ControllerBuilder:
         if fromBuilder:
             self.copyFromBuilder(fromBuilder)
 
-    def copyFromBuilder(self, fromBuilder):
+
+    def copyFromBuilder(self, fromBuilder: 'ControllerBuilder') -> 'ControllerBuilder':
         """
         Only copy values that would not cause conflict. e.g. skipping pins.
         @param fromBuilder:
@@ -110,6 +111,7 @@ class ControllerBuilder:
         copiedValues = {key: kwargs[key] for key in kwargs if key not in conflictFields}
         for key, value in copiedValues.items():
             setattr(self, key, value)
+        return self
 
     """
     Builder pattern Fluent API
@@ -599,6 +601,8 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         return self
 
     def spawn(self):
+        syncNavigationCountDownLatch = BasicSynchronizedNavigation().getCountDownLatch(default=Value('i', 0))
+
         """
         @return: A list of proxy drivers you can use on MainProcess to send stepping jobs to counterpart drivers in
         child process.
