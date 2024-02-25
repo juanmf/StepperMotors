@@ -2,6 +2,7 @@ import threading
 import time
 import traceback
 from concurrent.futures import Future
+from multiprocess import Value
 
 from RPi import GPIO
 from stepper_motors_juanmf1.UnipolarController import UnipolarMotorDriver
@@ -159,7 +160,14 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
             cls._instance = super(BasicSynchronizedNavigation, cls).__new__(cls, *args, **kwargs)
         return cls._instance
 
-    def __init__(self, high=GPIO.HIGH, low=GPIO.LOW):
+    class CountDownLatch:
+        """
+        Mimics multiprocessing Value.value interface to use this container instead of Value in non-multiprocess scenario
+        """
+        def __init__(self):
+            self.value = 0
+
+    def __init__(self, high=GPIO.HIGH, low=GPIO.LOW, countDownLatch=None):
         BlockingQueueWorker.__init__(self, self.__doGo, jobQueueMaxSize=4, workerName="SynchronizedNavigation")
         Navigation.__init__(self)
         # {startTimNs: [(controller, sleepTime), ...]}.
@@ -169,6 +177,26 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         self.lock = threading.Lock()
         self.upPins = []
         self.eventDispatcher = EventDispatcher.instance()
+        self.countDownLatch = countDownLatch
+
+    def getCountDownLatch(self, default: CountDownLatch or Value = None):
+        if self.countDownLatch is None:
+            self.countDownLatch = default
+        return self.countDownLatch
+
+    def setCountDown(self, value):
+        """
+        Will initialize self.countDownLatch assuming non-multiprocess scenario.
+        @param value:
+        @return:
+        """
+        if self.countDownLatch is None:
+            self.countDownLatch = BasicSynchronizedNavigation.CountDownLatch()
+        elif self.countDownLatch.value != 0:
+            raise RuntimeError("Cant have more than one latch active at a time. Still pending "
+                               f"{self.countDownLatch.value} motor jobs sent to start.")
+
+        self.countDownLatch.value = value
 
     # Todo: this will be called from multiple threads, one per driver. Handle synchronization accordingly.
     # Waits to get all Synchronized controllers to go then coordinates their steps so that all sleep and step at once.
@@ -183,6 +211,13 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
 
     def __doGo(self, pulsingController):
         self.putPulsingController(time.monotonic_ns(), pulsingController)
+        if self.countDownLatch and self.countDownLatch.value != 0:
+            while self.countDownLatch.value > 1:
+                # Headsup, If there is a previous independent job running and then a few motors need to start together,
+                # this extra looping might delay next pulse of running one.
+                self.countDownLatch.value -= 1
+                return
+            self.countDownLatch.value = 0
         delegatedDuePulses = []  # When no available Pins send pulse instruction to Driver.
         duePulses = []
         duePulsesStates = []
