@@ -28,282 +28,300 @@ from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_streams_if_n
 from stepper_motors_juanmf1.UnipolarController import UnipolarMotorDriver
 
 
+class ControllerBuilder:
+    def __init__(self, fromBuilder: 'ControllerBuilder' = None):
+        self.stepperMotor: StepperMotor or None = None
+
+        # Generic Pinout
+        self.directionGpioPin: int or None = None
+        # Unipolar uses a list of 4 step pins
+        self.stepGpioPin: int or list = None
+        self.sleepGpioPin: int or None = None
+        self.enableGpioPin: int or None = None
+        # Related to Sleep/Enable
+        self.useHoldingTorque: bool or None = None
+
+        self.modeGpioPins: list or None = None
+
+        # ThirdParty Adapted libs might use int as step styles
+        self.stepsMode: str or int = None
+
+        self.transformations: list[tuple] or None = None
+        self.accelerationStrategy: AccelerationStrategy or None = None
+        # Navigation style config
+        self.navigation: Navigation or None = None
+        self.delayPlanner: DelayPlanner or None = None
+        self.built = False
+
+        self.workerName: str or None = None
+        self.jobQueueMaxSize = 2
+        # multiprocess
+        self.jobQueue: queue.Queue or MpQueue = None
+        self.sharedMemory: list or None = None
+        self.isProxy = False
+        self.jobCompletionObserver: MultiprocessObserver or None = None
+
+        self.steppingCompleteEventName = "steppingComplete"
+
+        # TMC22XX specific
+        self.autoResetOnError = False
+        # CounterClockWise is home.
+        self.homeDirection = -1
+        self.indexGpioPin: int or None = None
+
+        self.stepsPerIndexPulse = 4
+        self.spreadGpioPin: int or None = None
+        self.diagGpioPin: int or None = None
+
+        # Adafruit
+        self.adafruitDriver: AdafruitStepperDriver or None = None
+
+        if fromBuilder:
+            self.copyFromBuilder(fromBuilder)
+
+    def copyFromBuilder(self, fromBuilder):
+        """
+        Only copy values that would not cause conflict. e.g. skipping pins.
+        @param fromBuilder:
+        @return:
+        """
+        kwargs = fromBuilder._driverConstructorKwArgs()
+        conflictFields = [
+            'stepperMotor',
+            'directionGpioPin',
+            'stepGpioPin',
+            'sleepGpioPin',
+            'enableGpioPin',
+            'modeGpioPins',
+            'accelerationStrategy',
+            'navigation',
+            'delayPlanner',
+            'built',
+            'jobQueue',
+            'sharedMemory',
+            'isProxy',
+            'jobCompletionObserver',
+            'indexGpioPin',
+            'spreadGpioPin',
+            'diagGpioPin',
+            'adafruitDriver',
+        ]
+
+        copiedValues = {key: kwargs[key] for key in kwargs if key not in conflictFields}
+        for key, value in copiedValues.items():
+            setattr(self, key, value)
+
+    """
+    Builder pattern Fluent API
+    """
+
+    def withSteppingCompleteEventName(self, steppingCompleteEventName):
+        self.steppingCompleteEventName = steppingCompleteEventName
+        return self
+
+    def withWorkerName(self, name):
+        self.workerName = name
+        return self
+
+    def withTMCPerks(self, *,
+                     autoResetOnError=False,
+                     homeDirection=-1,
+                     indexGpioPin: int or None = None,
+                     stepsPerIndexPulse=4,
+                     spreadGpioPin: int or None = None,
+                     diagGpioPin: int or None = None):
+        self.autoResetOnError = autoResetOnError
+        self.homeDirection = homeDirection
+        self.indexGpioPin = indexGpioPin
+        self.stepsPerIndexPulse = stepsPerIndexPulse
+        self.spreadGpioPin = spreadGpioPin
+        self.diagGpioPin = diagGpioPin
+
+    def withMultiprocessArgs(self, *,
+                             isProxy,
+                             sharedMemory=None,
+                             jobQueue: queue.Queue or MpQueue = None,
+                             jobQueueMaxSize=2,
+                             jobCompletionObserver=None):
+        self.jobQueueMaxSize = jobQueueMaxSize
+        # multiprocess
+        self.jobQueue = jobQueue
+        self.sharedMemory = sharedMemory
+        self.isProxy = isProxy
+        self.jobCompletionObserver = jobCompletionObserver
+        return self
+
+    def withHoldingTorqueEnabled(self, enabled=True):
+        self.useHoldingTorque = enabled
+        return self
+
+    def withSteppingMode(self, stepsMode):
+        self.stepsMode = stepsMode
+        return self
+
+    def withStepperMotor(self, stepperMotor: StepperMotor):
+        self.stepperMotor = stepperMotor
+        return self
+
+    def withPins(self, *, directionGpioPin=None, stepGpioPin=None, enableGpioPin=None, sleepGpioPin=None):
+        self.directionGpioPin = directionGpioPin
+        self.stepGpioPin = stepGpioPin
+        self.enableGpioPin = enableGpioPin
+        self.sleepGpioPin = sleepGpioPin
+        return self
+
+    def withSteppingModePins(self, modeGpioPins):
+        self.modeGpioPins = modeGpioPins
+        return self
+
+    def withTorqueCurve(self, transformations: list):
+        """
+        @param transformations: list of tuples
+                [(minPPS, maxIncrementPPS_1), (minPPS + maxIncrementPPS_1, maxIncrementPPS_2),...(maxPPS, 0)]
+                in Full step mode, where 1 pulse == 1 step
+        see Benchmark module
+        @return:
+        """
+        self.transformations = transformations
+        return self
+
+    def withAdafruitDriver(self, adafruitDriver: AdafruitStepperDriver):
+        self.adafruitDriver = adafruitDriver
+        return self
+
+    def _accelerationStrategyConstructorArgs(self):
+        assert self.stepperMotor and self.delayPlanner and self.stepsMode
+        return (self.stepperMotor,
+                self.delayPlanner,
+                BipolarStepperMotorDriver.RESOLUTION_MULTIPLE[self.stepsMode])
+
+    def withNoAcceleration(self):
+        self.accelerationStrategy = AccelerationStrategy(*self._accelerationStrategyConstructorArgs())
+        return self
+
+    def withLinearAcceleration(self):
+        self.accelerationStrategy = LinearAcceleration(*self._accelerationStrategyConstructorArgs())
+        return self
+
+    def withExponentialAcceleration(self):
+        self.accelerationStrategy = ExponentialAcceleration(*self._accelerationStrategyConstructorArgs())
+        return self
+
+    def withCustomTorqueCurveAccelerationAcceleration(self):
+        """
+        CustomTorqueCurve refers to max increment in PPS at each PPS from minPPS to maxPPS
+        """
+        self.accelerationStrategy = CustomAccelerationPerPps(*self._accelerationStrategyConstructorArgs(),
+                                                             transformations=self.transformations)
+        return self
+
+    def withInteractiveAcceleration(self, minSpeedDelta, minPPS):
+        self.accelerationStrategy = InteractiveAcceleration(*self._accelerationStrategyConstructorArgs(),
+                                                            minSpeedDelta, minPPS)
+        return self
+
+    def withNavigationStyleStatic(self):
+        self.navigation = StaticNavigation()
+        self.delayPlanner = StaticDelayPlanner()
+        return self
+
+    def withNavigationStyleDynamic(self):
+        self.navigation = DynamicNavigation()
+        self.delayPlanner = DynamicDelayPlanner()
+        return self
+
+    def withNavigationStyleSynchronized(self):
+        """
+        Initializes a set of Navigation and DelayPlain using BasicSynchronizedNavigation. Keep in mind
+        BasicSynchronizedNavigation is Singleton and can be initialized only once, setting the high and
+        low values that will be applied to all pulses sent to Drivers (except for ThirdPartyAdapter ones).
+        """
+        self.navigation = BasicSynchronizedNavigation()
+        self.delayPlanner = DynamicDelayPlanner()
+        return self
+
+    """
+    Builder methods
+    """
+
+    def _driverConstructorKwArgs(self, classToConstruct=None):
+        if not self.delayPlanner:
+            self.withNavigationStyleStatic()
+        if not self.accelerationStrategy:
+            self.withNoAcceleration()
+            
+        allParams = {
+            'stepperMotor': self.stepperMotor,
+            'directionGpioPin': self.directionGpioPin,
+            'stepGpioPin': self.stepGpioPin,
+            'sleepGpioPin': self.sleepGpioPin,
+            'enableGpioPin': self.enableGpioPin,
+            'useHoldingTorque': self.useHoldingTorque,
+            'modeGpioPins': self.modeGpioPins,
+            'stepsMode': self.stepsMode,
+            'transformations': self.transformations,
+            'accelerationStrategy': self.accelerationStrategy,
+            'navigation': self.navigation,
+            'delayPlanner': self.delayPlanner,
+            'built': self.built,
+            'workerName': self.workerName,
+            'jobQueueMaxSize': self.jobQueueMaxSize,
+            'jobQueue': self.jobQueue,
+            'sharedMemory': self.sharedMemory,
+            'isProxy': self.isProxy,
+            'jobCompletionObserver': self.jobCompletionObserver,
+            'steppingCompleteEventName': self.steppingCompleteEventName,
+            'autoResetOnError': self.autoResetOnError,
+            'homeDirection': self.homeDirection,
+            'indexGpioPin': self.indexGpioPin,
+            'stepsPerIndexPulse': self.stepsPerIndexPulse,
+            'spreadGpioPin': self.spreadGpioPin,
+            'diagGpioPin': self.diagGpioPin,
+            'adafruitDriver': self.adafruitDriver,
+        }
+        if classToConstruct is None:
+            return allParams
+        validParams = list(inspect.signature(classToConstruct.__init__).parameters)
+        constructorKwArgs = {key: allParams[key] for key in allParams if key in validParams}
+        return constructorKwArgs
+
+    def buildDRV8825Driver(self) -> DRV8825MotorDriver:
+        assert not self.built
+        driver = DRV8825MotorDriver(**self._driverConstructorKwArgs(DRV8825MotorDriver))
+        self.built = True
+        return driver
+
+    def buildUnipolarDriver(self) -> UnipolarMotorDriver:
+        assert not self.built
+        driver = UnipolarMotorDriver(**self._driverConstructorKwArgs(UnipolarMotorDriver))
+        self.built = True
+        return driver
+
+    def buildTMC2209StandaloneDriver(self) -> TMC2209StandaloneMotorDriver:
+        assert not self.built
+        driver = TMC2209StandaloneMotorDriver(**self._driverConstructorKwArgs(TMC2209StandaloneMotorDriver))
+        self.built = True
+        return driver
+
+    def buildAdafruitStepperDriverAdapter(self) -> AdafruitStepperDriverAdapter:
+        assert not self.built
+        driver = AdafruitStepperDriverAdapter(**self._driverConstructorKwArgs(AdafruitStepperDriverAdapter))
+        self.built = True
+        return driver
+
+    @staticmethod
+    def getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin=None,
+                        stepsMode="Full",
+                        modeGpioPins=None,
+                        enableGpioPin=None):
+        return (ControllerBuilder().withPins(directionGpioPin=directionGpioPin, stepGpioPin=stepGpioPin,
+                                             enableGpioPin=enableGpioPin, sleepGpioPin=sleepGpioPin)
+                 .withStepperMotor(stepperMotor)
+                 .withSteppingMode(stepsMode)
+                 .withSteppingModePins(modeGpioPins))
+
+
 class ControllerFactory:
-
-    class ControllerBuilder:
-        def __init__(self, fromBuilder: 'ControllerFactory.ControllerBuilder' = None):
-            self.stepperMotor: StepperMotor or None = None
-
-            # Generic Pinout
-            self.directionGpioPin: int or None = None
-            # Unipolar uses a list of 4 step pins
-            self.stepGpioPin: int or list = None
-            self.sleepGpioPin: int or None = None
-            self.enableGpioPin: int or None = None
-            # Related to Sleep/Enable
-            self.useHoldingTorque: bool or None = None
-
-            self.modeGpioPins: list or None = None
-
-            # ThirdParty Adapted libs might use int as step styles
-            self.stepsMode: str or int = None
-
-            self.transformations: list[tuple] or None = None
-            self.accelerationStrategy: AccelerationStrategy or None = None
-            # Navigation style config
-            self.navigation: Navigation or None = None
-            self.delayPlanner: DelayPlanner or None = None
-            self.built = False
-
-            self.workerName: str or None = None
-            self.jobQueueMaxSize = 2
-            # multiprocess
-            self.jobQueue: queue.Queue or MpQueue = None
-            self.sharedMemory: list or None = None
-            self.isProxy = False
-            self.jobCompletionObserver: MultiprocessObserver or None = None
-
-            self.steppingCompleteEventName = "steppingComplete"
-
-            # TMC22XX specific
-            self.autoResetOnError = False
-            # CounterClockWise is home.
-            self.homeDirection = -1
-            self.indexGpioPin: int or None = None
-
-            self.stepsPerIndexPulse = 4
-            self.spreadGpioPin: int or None = None
-            self.diagGpioPin: int or None = None
-
-            # Adafruit
-            self.adafruitDriver: AdafruitStepperDriver or None = None
-
-            if fromBuilder:
-                self.copyFromBuilder(fromBuilder)
-
-        def copyFromBuilder(self, fromBuilder):
-            """
-            Only copy values that would not cause conflict. e.g. skipping pins.
-            @param fromBuilder:
-            @return:
-            """
-            kwargs = fromBuilder._driverConstructorKwArgs()
-            conflictFields = [
-                'stepperMotor',
-                'directionGpioPin',
-                'stepGpioPin',
-                'sleepGpioPin',
-                'enableGpioPin',
-                'modeGpioPins',
-                'accelerationStrategy',
-                'navigation',
-                'delayPlanner',
-                'built',
-                'jobQueue',
-                'sharedMemory',
-                'isProxy',
-                'jobCompletionObserver',
-                'indexGpioPin',
-                'spreadGpioPin',
-                'diagGpioPin',
-                'adafruitDriver',
-            ]
-
-            copiedValues = {key: kwargs[key] for key in kwargs if key not in conflictFields}
-            for key, value in copiedValues.items():
-                setattr(self, key, value)
-
-        """
-        Builder pattern Fluent API
-        """
-        def withSteppingCompleteEventName(self, steppingCompleteEventName):
-            self.steppingCompleteEventName = steppingCompleteEventName
-            return self
-
-        def withWorkerName(self, name):
-            self.workerName = name
-            return self
-        
-        def withTMCPerks(self, *, 
-                         autoResetOnError=False,
-                         homeDirection=-1,
-                         indexGpioPin: int or None = None,
-                         stepsPerIndexPulse=4,
-                         spreadGpioPin: int or None = None,
-                         diagGpioPin: int or None = None):
-            self.autoResetOnError = autoResetOnError
-            self.homeDirection = homeDirection
-            self.indexGpioPin = indexGpioPin
-            self.stepsPerIndexPulse = stepsPerIndexPulse
-            self.spreadGpioPin = spreadGpioPin 
-            self.diagGpioPin = diagGpioPin
-            
-        def withMultiprocessArgs(self, *, 
-                                 isProxy, 
-                                 sharedMemory=None, 
-                                 jobQueue: queue.Queue or MpQueue = None, 
-                                 jobQueueMaxSize=2, 
-                                 jobCompletionObserver=None):
-            self.jobQueueMaxSize = jobQueueMaxSize
-            # multiprocess
-            self.jobQueue = jobQueue
-            self.sharedMemory = sharedMemory
-            self.isProxy = isProxy
-            self.jobCompletionObserver = jobCompletionObserver
-            return self
-            
-        def withHoldingTorqueEnabled(self, enabled=True):
-            self.useHoldingTorque = enabled
-            return self
-
-        def withSteppingMode(self, stepsMode):
-            self.stepsMode = stepsMode
-            return self
-
-        def withStepperMotor(self, stepperMotor: StepperMotor):
-            self.stepperMotor = stepperMotor
-            return self
-
-        def withPins(self, *, directionGpioPin=None, stepGpioPin=None, enableGpioPin=None, sleepGpioPin=None):
-            self.directionGpioPin = directionGpioPin
-            self.stepGpioPin= stepGpioPin
-            self.enableGpioPin = enableGpioPin
-            self.sleepGpioPin = sleepGpioPin
-            return self
-
-        def withSteppingModePins(self, modeGpioPins):
-            self.modeGpioPins = modeGpioPins
-            return self
-
-        def withTorqueCurve(self, transformations: list):
-            """
-            @param transformations: list of tuples
-                    [(minPPS, maxIncrementPPS_1), (minPPS + maxIncrementPPS_1, maxIncrementPPS_2),...(maxPPS, 0)]
-                    in Full step mode, where 1 pulse == 1 step
-            see Benchmark module
-            @return:
-            """
-            self.transformations = transformations
-            return self
-
-        def withAdafruitDriver(self, adafruitDriver: AdafruitStepperDriver):
-            self.adafruitDriver = adafruitDriver
-            return self
-        
-        def _accelerationStrategyConstructorArgs(self):
-            assert self.stepperMotor and self.delayPlanner and self.stepsMode
-            return (self.stepperMotor, 
-                    self.delayPlanner, 
-                    BipolarStepperMotorDriver.RESOLUTION_MULTIPLE[self.stepsMode])   
-        
-        def withNoAcceleration(self):
-            self.accelerationStrategy = AccelerationStrategy(*self._accelerationStrategyConstructorArgs())
-            return self
-
-        def withLinearAcceleration(self):
-            self.accelerationStrategy = LinearAcceleration(*self._accelerationStrategyConstructorArgs())
-            return self
-
-        def withExponentialAcceleration(self):
-            self.accelerationStrategy = ExponentialAcceleration(*self._accelerationStrategyConstructorArgs())
-            return self
-
-        def withCustomTorqueCurveAccelerationAcceleration(self):
-            """
-            CustomTorqueCurve refers to max increment in PPS at each PPS from minPPS to maxPPS
-            """
-            self.accelerationStrategy = CustomAccelerationPerPps(*self._accelerationStrategyConstructorArgs(),
-                                                                 transformations=self.transformations)
-            return self
-
-        def withInteractiveAcceleration(self, minSpeedDelta, minPPS):
-            self.accelerationStrategy = InteractiveAcceleration(*self._accelerationStrategyConstructorArgs(),
-                                                                minSpeedDelta, minPPS)
-            return self
-
-        def withNavigationStyleStatic(self):
-            self.navigation = StaticNavigation()
-            self.delayPlanner = StaticDelayPlanner()
-            return self
-
-        def withNavigationStyleDynamic(self):
-            self.navigation = DynamicNavigation()
-            self.delayPlanner = DynamicDelayPlanner()
-            return self
-
-        def withNavigationStyleSynchronized(self):
-            """
-            Initializes a set of Navigation and DelayPlain using BasicSynchronizedNavigation. Keep in mind
-            BasicSynchronizedNavigation is Singleton and can be initialized only once, setting the high and
-            low values that will be applied to all pulses sent to Drivers (except for ThirdPartyAdapter ones).
-            """
-            self.navigation = BasicSynchronizedNavigation()
-            self.delayPlanner = DynamicDelayPlanner()
-            return self
-
-        """
-        Builder methods
-        """
-
-        def _driverConstructorKwArgs(self, classToConstruct=None):
-            allParams = {
-                'stepperMotor': self.stepperMotor,
-                'directionGpioPin': self.directionGpioPin,
-                'stepGpioPin': self.stepGpioPin,
-                'sleepGpioPin': self.sleepGpioPin,
-                'enableGpioPin': self.enableGpioPin,
-                'useHoldingTorque': self.useHoldingTorque,
-                'modeGpioPins': self.modeGpioPins,
-                'stepsMode': self.stepsMode,
-                'transformations': self.transformations,
-                'accelerationStrategy': self.accelerationStrategy,
-                'navigation': self.navigation,
-                'delayPlanner': self.delayPlanner,
-                'built': self.built,
-                'workerName': self.workerName,
-                'jobQueueMaxSize': self.jobQueueMaxSize,
-                'jobQueue': self.jobQueue,
-                'sharedMemory': self.sharedMemory,
-                'isProxy': self.isProxy,
-                'jobCompletionObserver': self.jobCompletionObserver,
-                'steppingCompleteEventName': self.steppingCompleteEventName,
-                'autoResetOnError': self.autoResetOnError,
-                'homeDirection': self.homeDirection,
-                'indexGpioPin': self.indexGpioPin,
-                'stepsPerIndexPulse': self.stepsPerIndexPulse,
-                'spreadGpioPin': self.spreadGpioPin,
-                'diagGpioPin': self.diagGpioPin,
-                'adafruitDriver': self.adafruitDriver,
-            }
-            if classToConstruct is None:
-                return allParams
-            validParams = list(inspect.signature(classToConstruct.__init__).parameters)
-            constructorKwArgs = {key: allParams[key] for key in allParams if key in validParams}
-            return constructorKwArgs
-
-        def buildDRV8825Driver(self) -> DRV8825MotorDriver:
-            assert not self.built
-            driver = DRV8825MotorDriver(**self._driverConstructorKwArgs(DRV8825MotorDriver))
-            self.built = True
-            return driver
-
-        def buildUnipolarDriver(self) -> UnipolarMotorDriver:
-            assert not self.built
-            driver = UnipolarMotorDriver(**self._driverConstructorKwArgs(UnipolarMotorDriver))
-            self.built = True
-            return driver
-
-        def buildTMC2209StandaloneDriver(self) -> TMC2209StandaloneMotorDriver:
-            assert not self.built
-            driver = TMC2209StandaloneMotorDriver(**self._driverConstructorKwArgs(TMC2209StandaloneMotorDriver))
-            self.built = True
-            return driver
-
-        def buildAdafruitStepperDriverAdapter(self) -> AdafruitStepperDriverAdapter:
-            assert not self.built
-            driver = AdafruitStepperDriverAdapter(**self._driverConstructorKwArgs(AdafruitStepperDriverAdapter))
-            self.built = True
-            return driver
 
     def getDelayPlanner(self) -> DelayPlanner:
         pass
@@ -311,16 +329,12 @@ class ControllerFactory:
     def getNavigation(self) -> Navigation:
         pass
 
-    def getBasicBuilder(self, stepperMotor, directionPin, stepPin, sleepGpioPin=None,
+    def getBasicBuilder(self, stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin=None,
                         stepsMode="Full",
                         modeGpioPins=None,
                         enableGpioPin=None) -> ControllerBuilder:
-        builder = ControllerFactory.ControllerBuilder()
-        (builder.withPins(directionGpioPin=directionPin, stepGpioPin=stepPin, enableGpioPin=enableGpioPin,
-                          sleepGpioPin=sleepGpioPin)
-                .withStepperMotor(stepperMotor)
-                .withSteppingMode(stepsMode)
-                .withSteppingModePins(modeGpioPins))
+        builder = ControllerBuilder.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin,
+                                                    stepsMode, modeGpioPins, enableGpioPin)
         return self.addNavigationStyle(builder)
 
     # Returns a controller that can't (de)accelerate.
@@ -533,7 +547,7 @@ class StaticControllerFactory(ControllerFactory):
     def getNavigation(self):
         return StaticNavigation()
 
-    def addNavigationStyle(self, builder: ControllerFactory.ControllerBuilder):
+    def addNavigationStyle(self, builder: ControllerBuilder):
         return builder.withNavigationStyleStatic()
 
 class DynamicControllerFactory(ControllerFactory):
@@ -543,7 +557,7 @@ class DynamicControllerFactory(ControllerFactory):
     def getNavigation(self):
         return DynamicNavigation()
 
-    def addNavigationStyle(self, builder: ControllerFactory.ControllerBuilder):
+    def addNavigationStyle(self, builder: ControllerBuilder):
         return builder.withNavigationStyleDynamic()
 
 class SynchronizedControllerFactory(ControllerFactory):
@@ -554,7 +568,7 @@ class SynchronizedControllerFactory(ControllerFactory):
     def getNavigation(self):
         return BasicSynchronizedNavigation()
 
-    def addNavigationStyle(self, builder: ControllerFactory.ControllerBuilder):
+    def addNavigationStyle(self, builder: ControllerBuilder):
         return builder.withNavigationStyleSynchronized()
 
 class MultiProcessingControllerFactory(SynchronizedControllerFactory):
