@@ -313,7 +313,7 @@ class Benchmark:
         method()
 
     @staticmethod
-    def initBenchmark(stepperMotor, directionPin, stepPin, *,
+    def initBenchmark(stepperMotor, directionGpioPin, stepGpioPin, *,
                       sleepGpioPin=None,
                       minPps=None,
                       maxPps=None,
@@ -325,7 +325,7 @@ class Benchmark:
         controllerFactory = DynamicControllerFactory()
 
         driver = controllerFactory.getInteractiveDRV8825With(
-            stepperMotor, directionPin, stepPin, minPpsDelta, absoluteMinPps, sleepGpioPin=sleepGpioPin)
+            stepperMotor, directionGpioPin, stepGpioPin, minPpsDelta, absoluteMinPps, sleepGpioPin=sleepGpioPin)
 
         bench = Benchmark()
         # You can add your motor mi and max speed to skip their discovery phases.
@@ -338,7 +338,7 @@ class Benchmark:
         # Todo: test after library extraction.
         args = sys.argv[1:]
         if len(args) < 2 or not (int(args[0]) < 45 and int(args[1]) < 45):
-            raise RuntimeError("Need directionPin, StepPin to init Controller.")
+            raise RuntimeError("Need directionGpioPin, StepPin to init Controller.")
 
         motor = (GenericStepper.Builder()
                  .withSpr(200)

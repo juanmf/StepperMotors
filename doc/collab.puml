@@ -36,9 +36,9 @@ class UsesSingleThreadedExecutor
 class ThreadPoolExecutorStackTraced
 
 class ControllerFactory #APPLICATION {
-    getLinearDRV8825With(stepperMotor, directionPin, StepPin):
-    getExponentialDRV8825With(stepperMotor, directionPin, StepPin):
-    getCustomTorqueCharacteristicsDRV8825With(stepperMotor, directionPin, StepPin):
+    getLinearDRV8825With(stepperMotor, directionGpioPin, StepPin):
+    getExponentialDRV8825With(stepperMotor, directionGpioPin, StepPin):
+    getCustomTorqueCharacteristicsDRV8825With(stepperMotor, directionGpioPin, StepPin):
 }
 class StaticControllerFactory
 class DynamicControllerFactory

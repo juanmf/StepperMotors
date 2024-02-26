@@ -156,11 +156,11 @@ class MyRoboticArm:
     Step modes can also be set for micro-stepping. Tho ControllerFactory methods use only full step mode ATM.
     Sleep pin can also be set for DRV8825MotorDriver when no holding torque neeed.  
     """
-    self.elbow =    MyRoboticArm.setupDriver(directionPin=23, stepPin=24) 
+    self.elbow =    MyRoboticArm.setupDriver(directionGpioPin=23, stepGpioPin=24) 
     self.elbowPosition = 0
-    self.shoulder = MyRoboticArm.setupDriver(directionPin=14, stepPin=15) 
+    self.shoulder = MyRoboticArm.setupDriver(directionGpioPin=14, stepGpioPin=15) 
     self.shoulderPosition = 0
-    self.hand =     MyRoboticArm.setupDriver(directionPin=25, stepPin=8) 
+    self.hand =     MyRoboticArm.setupDriver(directionGpioPin=25, stepGpioPin=8) 
     self.handPosition = 0
     
     # Moving arm
@@ -203,13 +203,13 @@ class MyRoboticArm:
         self.hand.stepCounterClockWise(handDelta, self.handPositionListener)
                            
   @staticmethod
-  def setupDriver(*, directionPin, stepPin):
+  def setupDriver(*, directionGpioPin, stepGpioPin):
     stepperMotor = GenericStepper(maxPps=2000, minPps=150)
     delayPlanner = DynamicDelayPlanner()
     navigation = DynamicNavigation()
     
     acceleration = ExponentialAcceleration(stepperMotor, delayPlanner)
-    return DRV8825MotorDriver(stepperMotor, acceleration, directionPin, stepPin, navigation)
+    return DRV8825MotorDriver(stepperMotor, acceleration, directionGpioPin, stepGpioPin, navigation)
 
 ```
 
@@ -326,7 +326,7 @@ class Training:
             print("Benchmarking Motor")
             motor = GenericStepper(maxPps=2000, minPps=190)
             
-            Benchmark.initBenchmark(motor, directionPin=23, stepPin=8)
+            Benchmark.initBenchmark(motor, directionGpioPin=23, stepGpioPin=8)
         
 
 if __name__ == '__main__':
@@ -344,7 +344,7 @@ Effectively splitting your pulses' frequency as you add motors.
 
 Here is where `stepper_motors_juanmf1.Navigation.BasicSynchronizedNavigation` can help. The drivers are still 
 operating as `BlockingQueueWorker` with its own Thread but they share a Singleton Navigation object that aggregates 
-drivers in need of pulsing sending single GPIO outputs commands at a time, with all necessary stepPins (one per driver). 
+drivers in need of pulsing sending single GPIO outputs commands at a time, with all necessary stepGpioPins (one per driver). 
 
 This alone can be good enough if your client application isn't overloading the process. `BasicSynchronizedNavigation` 
 implements active wait, looping through controllers (and blocking `stepper_motors_juanmf1.Controller.MotorDriver`)
@@ -361,10 +361,10 @@ from stepper_motors_juanmf1.StepperMotor import GenericStepper
 # Defaults to Full step mode
 factory = SynchronizedControllerFactory()
 x_stepperMotor = GenericStepper(maxPps=800, minPps=150)
-x_driver = factory.getExponentialDRV8825With(x_stepperMotor, directionPin=13, stepPin=19, sleepGpioPin=12)
+x_driver = factory.getExponentialDRV8825With(x_stepperMotor, directionGpioPin=13, stepGpioPin=19, sleepGpioPin=12)
 
 y_stepperMotor = GenericStepper(maxPps=800, minPps=150)
-y_driver = factory.getExponentialDRV8825With(y_stepperMotor, directionPin=24, stepPin=18, sleepGpioPin=4)
+y_driver = factory.getExponentialDRV8825With(y_stepperMotor, directionGpioPin=24, stepGpioPin=18, sleepGpioPin=4)
 
 # Non-blocking, Equivalent to stepCounterClockWise(self, 100):
 y_driver.signedSteps(-100)
@@ -397,9 +397,9 @@ y_stepperMotor = GenericStepper(maxPps=800, minPps=150)
 
 x_driver, y_driver = (controllerFactory.setUpProcess()
     .withDriver([], controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
-                x_stepperMotor, directionPin=13, stepPin=19, sleepGpioPin=12)
+                x_stepperMotor, directionGpioPin=13, stepGpioPin=19, sleepGpioPin=12)
     .withDriver([], controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
-                y_stepperMotor, directionPin=24, stepPin=18, sleepGpioPin=4)
+                y_stepperMotor, directionGpioPin=24, stepGpioPin=18, sleepGpioPin=4)
     .spawn())
 
 # Non-blocking, Equivalent to stepCounterClockWise(self, 100):
@@ -424,14 +424,14 @@ Unpacking in child process!!
         <bound method MultiProcessingControllerFactory.getMpCustomTorqueCharacteristicsDRV8825With of <stepper_motors_juanmf1.ControllerFactory.MultiProcessingControllerFactory object at 0x7f8be45950>>,
         (
             (<stepper_motors_juanmf1.StepperMotor.PG35S_D48_HHC2 object at 0x7f8afc4690>,),
-            {'directionPin': 13, 'stepPin': 19, 'sleepGpioPin': 12}
+            {'directionGpioPin': 13, 'stepGpioPin': 19, 'sleepGpioPin': 12}
         )
     ),
     (
         <bound method MultiProcessingControllerFactory.getMpCustomTorqueCharacteristicsDRV8825With of <stepper_motors_juanmf1.ControllerFactory.MultiProcessingControllerFactory object at 0x7f8be45950>>,
         (
             (<stepper_motors_juanmf1.StepperMotor.PG35S_D48_HHC2 object at 0x7f8aee0750>,),
-            {'directionPin': 24, 'stepPin': 18, 'sleepGpioPin': 4}
+            {'directionGpioPin': 24, 'stepGpioPin': 18, 'sleepGpioPin': 4}
         )
     )
 ]
@@ -526,10 +526,10 @@ class PolarCoordinatesSample:
                 .setUpProcess()
                 .withDriver(multiprocessObserver=azimuthObserver,
                             factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
-                            stepperMotor=PG35S_D48_HHC2(True), directionPin=13, stepPin=19, sleepGpioPin=12)
+                            stepperMotor=PG35S_D48_HHC2(True), directionGpioPin=13, stepGpioPin=19, sleepGpioPin=12)
                 .withDriver(multiprocessObserver=elevationObserver,
                             factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
-                            stepperMotor=PG35S_D48_HHC2(True), directionPin=24, stepPin=18, sleepGpioPin=4)
+                            stepperMotor=PG35S_D48_HHC2(True), directionGpioPin=24, stepGpioPin=18, sleepGpioPin=4)
                 .spawn())
 
     def childProcessEventObserver(self, name, sharedInt):
@@ -571,9 +571,9 @@ class PolarCoordinatesSample:
     Not used in multiprocess scenario.
     """
     self.azimuthDriver: DRV8825MotorDriver = controllerFactory.getCustomTorqueCharacteristicsDRV8825With(
-      PG35S_D48_HHC2(True), directionPin=13, stepPin=19, sleepGpioPin=12)
+      PG35S_D48_HHC2(True), directionGpioPin=13, stepGpioPin=19, sleepGpioPin=12)
     self.elevationDriver = controllerFactory.getCustomTorqueCharacteristicsDRV8825With(
-      PG35S_D48_HHC2(True), directionPin=24, stepPin=18, sleepGpioPin=4)
+      PG35S_D48_HHC2(True), directionGpioPin=24, stepGpioPin=18, sleepGpioPin=4)
 
   """
   Setup done, usage follows

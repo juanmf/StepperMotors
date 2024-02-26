@@ -71,7 +71,7 @@ class PolarCoordinatesSample <<User/Client code>> {
 }
 class MultiProcessingControllerFactory <<Fluid interface>>{
 setUpProcess()
-withDriver(clientSharedMemory, factoryFnReference, stepperMotor, directionPin, stepPin, sleepGpioPin)
+withDriver(clientSharedMemory, factoryFnReference, stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin)
 spawn() // spawns child process (P2), initiate drivers in P2 and driver proxies in MainProcess.
 }
 }

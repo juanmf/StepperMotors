@@ -44,8 +44,8 @@ class MultiProcessPolarCoordinatesSample:
                 .setUpProcess()
                 .withDriver(multiprocessObserver=azimuthObserver,
                             factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
-                            stepperMotor=PG35S_D48_HHC2(True), directionPin=13,
-                            stepPin=19, sleepGpioPin=12)
+                            stepperMotor=PG35S_D48_HHC2(True), directionGpioPin=13,
+                            stepGpioPin=19, sleepGpioPin=12)
                 # Can put orders to build more drivers here .withDriver(...).withDriver(...)...
                 .spawn())
 
@@ -67,7 +67,7 @@ class MultiProcessPolarCoordinatesSample:
         Not used in multiprocess scenario. Regular Factory, simplest approach for comparison with MP approach.
         """
         self.azimuthDriver: DRV8825MotorDriver = controllerFactory.getCustomTorqueCharacteristicsDRV8825With(
-            PG35S_D48_HHC2(True), directionPin=13, stepPin=19, sleepGpioPin=12)
+            PG35S_D48_HHC2(True), directionGpioPin=13, stepGpioPin=19, sleepGpioPin=12)
 
     """
     Setup done, usage follows

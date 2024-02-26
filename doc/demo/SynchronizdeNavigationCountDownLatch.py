@@ -48,9 +48,9 @@ controllerFactory = MultiProcessingControllerFactory()
 driver1_1, driver1_2 = (controllerFactory.setUpProcess()
                         # Todo: Make sure multiProcessObserver can be None
                         .withDriver(factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
-                                    stepperMotor=motor1_1, directionPin=13, stepPin=19, sleepGpioPin=12)
+                                    stepperMotor=motor1_1, directionGpioPin=13, stepGpioPin=19, sleepGpioPin=12)
                         .withDriver(factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
-                                    stepperMotor=motor1_1, directionPin=8, stepPin=25, sleepGpioPin=1)
+                                    stepperMotor=motor1_1, directionGpioPin=8, stepGpioPin=25, sleepGpioPin=1)
                         .spawn(withBasicSynchronizedNavigationMultitonKey=0))  # Navigation to use
 
 
@@ -63,7 +63,7 @@ builder2 = (ControllerBuilder.getBasicBuilder(motor2, directionGpioPin=8, stepGp
 driver2_1, driver2_2 = (controllerFactory.setUpProcess()
                         # Todo: Make sure multiProcessObserver can be None
                         .withDriver(factoryFnReference=controllerFactory.getMpCustomTorqueCharacteristicsDRV8825With,
-                                    stepperMotor=motor1_1, directionPin=14, stepPin=20, sleepGpioPin=15)
+                                    stepperMotor=motor1_1, directionGpioPin=14, stepGpioPin=20, sleepGpioPin=15)
                         .withDriverBuilder(builder=builder2, builderMethodRef=builder2.buildDRV8825Driver)
                         .spawn(withBasicSynchronizedNavigationMultitonKey=1))  # Navigation to use
 
