@@ -45,6 +45,7 @@ class MotorDriver(BlockingQueueWorker):
                  directionGpioPin,
                  stepGpioPin,
                  accelerationStrategy,
+                 navigation,
                  workerName,
                  jobQueueMaxSize=2,
                  jobQueue=None,
@@ -65,6 +66,10 @@ class MotorDriver(BlockingQueueWorker):
         self.stepGpioPin = stepGpioPin
         self.directionGpioPin = directionGpioPin
         self.stepperMotor = stepperMotor
+        # Tracks current either by position for position based movement (DynamicNavigation, interruptible)
+        # or by fixed number of steps (StaticNavigation, uninterruptible).
+        self.navigation = navigation
+        self.navigation.setDriverPulseTimeNs(driverPulseTimeUs=self.PULSE_TIME_MICROS)
         self.accelerationStrategy = accelerationStrategy
         if sharedMemory is not None:
             self.sharedLock = sharedMemory[0]
@@ -134,6 +139,17 @@ class MotorDriver(BlockingQueueWorker):
             # overhead in your platform.
             time.sleep(micros / 1_000_000)
 
+    def __str__(self):
+        return (f"{type(self)} \n"
+                f"Stepper Motor: {self.stepperMotor}\n"
+                f"Direction GPIO Pin: {self.directionGpioPin}\n"
+                f"Step GPIO Pin: {self.stepGpioPin}\n"
+                f"Navigation Strategy: {self.navigation}\n"
+                f"Acceleration Strategy: {self.accelerationStrategy}\n"
+                f"MultiprocessObserver: {self.multiprocessObserver}\n"
+                f"sharedPosition: {self.sharedPosition}\n"
+                f"sharedLock: {self.sharedLock}\n"
+                f"Worker details {super().__str__()}")
 
 class BipolarStepperMotorDriver(MotorDriver):
     LOCK = threading.Lock()
@@ -225,6 +241,7 @@ class BipolarStepperMotorDriver(MotorDriver):
                          directionGpioPin=directionGpioPin,
                          stepGpioPin=stepGpioPin,
                          accelerationStrategy=accelerationStrategy,
+                         navigation=navigation,
                          workerName=workerName,
                          jobQueue=jobQueue,
                          sharedMemory=sharedMemory,
@@ -236,10 +253,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         self.modeGpioPins = modeGpioPins  # Microstep Resolution GPIO Pins
         self.stepsMode = stepsMode
         self.sleepGpioPin = sleepGpioPin
-        # Tracks current either by position for position based movement (DynamicNavigation, interruptible)
-        # or by fixed number of steps (StaticNavigation, uninterruptible).
-        self.navigation = navigation
-        self.navigation.setDriverPulseTimeNs(driverPulseTimeUs=self.PULSE_TIME_MICROS)
+
         # Counts pulses, Clockwise adds, counterclockwise subtracts.
         self.currentPosition = 0
         # Corrects self.currentPosition for stepping mode.

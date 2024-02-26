@@ -251,7 +251,9 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
     def __str__(self):
         # thread_id = threading.current_thread().ident
 
-        return (f"BlockingQueueWorker {self.workerName} with jobList probable len {self.__jobQueue.qsize()} \n"
+        return (f"BlockingQueueWorker {self.workerName} "
+                f"Is Proxy: {self.isProxy}\n"
+                f"with job Queue {self.__jobQueue} of probable len {self.__jobQueue.qsize()} \n"
                 f"jobList max len {self.__jobQueue.maxsize}\n"
                 f"worker thread ({self.workerThread})")
 

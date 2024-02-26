@@ -150,16 +150,15 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
     just have a set of independent drivers timing their pulses to their convenience. This Navigation ensures steps are
     locked into a rithm.
     """
-    _instance = {}
+    _instances = {}
 
-    def __new__(cls, high=GPIO.HIGH, low=GPIO.LOW, countDownLatch=None, newMultitonKey=0):
-        """
-        Singleton
-        """
-        if newMultitonKey not in cls._instance:
-            instance = super(BasicSynchronizedNavigation, cls).__new__(cls)
-            cls._instance[newMultitonKey] = instance
-        return cls._instance[newMultitonKey]
+    @staticmethod
+    def getInstance(high=GPIO.HIGH, low=GPIO.LOW, countDownLatch=None, newMultitonKey=0):
+        if newMultitonKey not in BasicSynchronizedNavigation._instances:
+
+            instance = BasicSynchronizedNavigation(high, low, countDownLatch, newMultitonKey)
+            BasicSynchronizedNavigation._instances[newMultitonKey] = instance
+        return BasicSynchronizedNavigation._instances[newMultitonKey]
 
     class CountDownLatch:
         """
@@ -169,6 +168,8 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
             self.value = 0
 
     def __init__(self, high=GPIO.HIGH, low=GPIO.LOW, countDownLatch=None, newMultitonKey=0):
+        assert newMultitonKey not in BasicSynchronizedNavigation._instances
+        print(f"New instance of {type(self)}")
         BlockingQueueWorker.__init__(self, self.__doGo, jobQueueMaxSize=4, workerName="SynchronizedNavigation")
         Navigation.__init__(self)
         # {startTimNs: [(controller, sleepTime), ...]}.
@@ -211,15 +212,21 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                 eventInAdvanceSteps=eventInAdvanceSteps, eventName=eventName, high=self.high)])
         return controller.currentJob.block
 
-    def __doGo(self, pulsingController):
+    def latchDown(self, pulsingController):
         self.putPulsingController(time.monotonic_ns(), pulsingController)
         if self.countDownLatch and self.countDownLatch.value != 0:
             while self.countDownLatch.value > 1:
                 # Headsup, If there is a previous independent job running and then a few motors need to start together,
                 # this extra looping might delay next pulse of running one.
                 self.countDownLatch.value -= 1
-                return
+                return True
             self.countDownLatch.value = 0
+
+        return False
+
+    def __doGo(self, pulsingController):
+        if self.latchDown(pulsingController):
+            return
         delegatedDuePulses = []  # When no available Pins send pulse instruction to Driver.
         duePulses = []
         duePulsesStates = []

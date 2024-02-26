@@ -61,7 +61,10 @@ class ControllerBuilder:
         self.isProxy = False
         self.jobCompletionObserver: MultiprocessObserver or None = None
 
-        self.stepGpioPingCompleteEventName = "stepGpioPingComplete"
+        # This one does not have a constructor argument, goes in sharedMemory[2]
+        self.clientMultiprocessObserver: MultiprocessObserver or None = None
+
+        self.steppingCompleteEventName = "steppingComplete"
 
         # TMC22XX specific
         self.autoResetOnError = False
@@ -116,8 +119,12 @@ class ControllerBuilder:
     Builder pattern Fluent API
     """
 
-    def withstepGpioPingCompleteEventName(self, stepGpioPingCompleteEventName):
-        self.stepGpioPingCompleteEventName = stepGpioPingCompleteEventName
+    def withClientMultiprocessObserver(self, clientMultiprocessObserver: MultiprocessObserver):
+        self.clientMultiprocessObserver = clientMultiprocessObserver
+        return self
+
+    def withsteppingCompleteEventName(self, steppingCompleteEventName):
+        self.steppingCompleteEventName = steppingCompleteEventName
         return self
 
     def withWorkerName(self, name):
@@ -138,25 +145,27 @@ class ControllerBuilder:
         self.spreadGpioPin = spreadGpioPin
         self.diagGpioPin = diagGpioPin
 
-    def withMultiprocessArgs(self, *,
-                             isProxy,
-                             sharedMemory=None,
-                             jobQueue: queue.Queue or MpQueue = None,
-                             jobQueueMaxSize=2,
-                             jobCompletionObserver=None):
-        self.jobQueueMaxSize = jobQueueMaxSize
-        # multiprocess
-        self.jobQueue = jobQueue
+    def withSharedMemory(self, sharedMemory: list):
         self.sharedMemory = sharedMemory
-        self.isProxy = isProxy
+        return self
+
+    def withJobCompletionObserver(self, jobCompletionObserver: MultiprocessObserver):
         self.jobCompletionObserver = jobCompletionObserver
+        return self
+
+    def withJobQueue(self, jobQueue: queue.Queue or MpQueue):
+        self.jobQueue = jobQueue
+        return self
+
+    def isMultiprocessProxy(self, isProxy):
+        self.isProxy = isProxy
         return self
 
     def withHoldingTorqueEnabled(self, enabled=True):
         self.useHoldingTorque = enabled
         return self
 
-    def withstepGpioPingMode(self, stepsMode):
+    def withsteppingMode(self, stepsMode):
         self.stepsMode = stepsMode
         return self
 
@@ -171,7 +180,7 @@ class ControllerBuilder:
         self.sleepGpioPin = sleepGpioPin
         return self
 
-    def withstepGpioPingModePins(self, modeGpioPins):
+    def withsteppingModePins(self, modeGpioPins):
         self.modeGpioPins = modeGpioPins
         return self
 
@@ -231,13 +240,13 @@ class ControllerBuilder:
         self.delayPlanner = DynamicDelayPlanner()
         return self
 
-    def withNavigationStyleSynchronized(self):
+    def withNavigationStyleSynchronized(self, newMultitonKey=0):
         """
         Initializes a set of Navigation and DelayPlain using BasicSynchronizedNavigation. Keep in mind
         BasicSynchronizedNavigation is Singleton and can be initialized only once, setting the high and
         low values that will be applied to all pulses sent to Drivers (except for ThirdPartyAdapter ones).
         """
-        self.navigation = BasicSynchronizedNavigation()
+        self.navigation = BasicSynchronizedNavigation.getInstance(newMultitonKey=newMultitonKey)
         self.delayPlanner = DynamicDelayPlanner()
         return self
 
@@ -271,7 +280,7 @@ class ControllerBuilder:
             'sharedMemory': self.sharedMemory,
             'isProxy': self.isProxy,
             'jobCompletionObserver': self.jobCompletionObserver,
-            'stepGpioPingCompleteEventName': self.stepGpioPingCompleteEventName,
+            'steppingCompleteEventName': self.steppingCompleteEventName,
             'autoResetOnError': self.autoResetOnError,
             'homeDirection': self.homeDirection,
             'indexGpioPin': self.indexGpioPin,
@@ -318,8 +327,8 @@ class ControllerBuilder:
         return (ControllerBuilder().withPins(directionGpioPin=directionGpioPin, stepGpioPin=stepGpioPin,
                                              enableGpioPin=enableGpioPin, sleepGpioPin=sleepGpioPin)
                  .withStepperMotor(stepperMotor)
-                 .withstepGpioPingMode(stepsMode)
-                 .withstepGpioPingModePins(modeGpioPins))
+                 .withsteppingMode(stepsMode)
+                 .withsteppingModePins(modeGpioPins))
 
 
 class ControllerFactory:
@@ -331,12 +340,13 @@ class ControllerFactory:
         pass
 
     def getBasicBuilder(self, stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin=None,
-                        stepsMode="Full",
+                        stepsMode=None,
                         modeGpioPins=None,
-                        enableGpioPin=None) -> ControllerBuilder:
+                        enableGpioPin=None,
+                        syncNavigationMultitonKey=0) -> ControllerBuilder:
         builder = ControllerBuilder.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin,
                                                     stepsMode, modeGpioPins, enableGpioPin)
-        return self.addNavigationStyle(builder)
+        return self.addNavigationStyle(builder, syncNavigationMultitonKey)
 
     # Returns a controller that can't (de)accelerate.
     def getFlatDRV8825With(self, stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin=None,
@@ -395,7 +405,7 @@ class ControllerFactory:
                                      modeGpioPins=modeGpioPins,
                                      enableGpioPin=enableGpioPin)
                 .withNoAcceleration()
-                .buildDRV8825Driver())
+                .buildTMC2209StandaloneDriver())
 
     def getLinearTCM2209With(self, stepperMotor, directionGpioPin, stepGpioPin,
                              stepsMode="1/8",
@@ -406,7 +416,7 @@ class ControllerFactory:
                                      modeGpioPins=modeGpioPins,
                                      enableGpioPin=enableGpioPin)
                 .withLinearAcceleration()
-                .buildDRV8825Driver())
+                .buildTMC2209StandaloneDriver())
 
     def getExponentialTCM2209With(self, stepperMotor, directionGpioPin, stepGpioPin,
                                   stepsMode="1/8",
@@ -417,7 +427,7 @@ class ControllerFactory:
                                      modeGpioPins=modeGpioPins,
                                      enableGpioPin=enableGpioPin)
                 .withExponentialAcceleration()
-                .buildDRV8825Driver())
+                .buildTMC2209StandaloneDriver())
 
     def getCustomTorqueCharacteristicsTCM2209With(self, stepperMotor, directionGpioPin, stepGpioPin, transformations=None,
                                                   stepsMode="1/8",
@@ -428,7 +438,7 @@ class ControllerFactory:
                                      modeGpioPins=modeGpioPins,
                                      enableGpioPin=enableGpioPin)
                 .withCustomTorqueCurveAccelerationAcceleration()
-                .buildDRV8825Driver())
+                .buildTMC2209StandaloneDriver())
 
     def getInteractiveTCM2209With(self, stepperMotor, directionGpioPin, stepGpioPin, minSpeedDelta, minPps,
                                   stepsMode="1/8",
@@ -439,7 +449,7 @@ class ControllerFactory:
                                      modeGpioPins=modeGpioPins,
                                      enableGpioPin=enableGpioPin)
                 .withInteractiveAcceleration(minSpeedDelta, minPps)
-                .buildDRV8825Driver())
+                .buildTMC2209StandaloneDriver())
 
     def getLinearUnipolarDriverWith(self,
                                     stepperMotor,
@@ -482,7 +492,7 @@ class ControllerFactory:
                                      stepsMode=stepsMode,
                                      enableGpioPin=enableGpioPin)
                 .withTorqueCurve(transformations)
-                .withExponentialAcceleration()
+                .withCustomTorqueCurveAccelerationAcceleration()
                 .buildUnipolarDriver())
 
     def getInteractiveUnipolarDriverWith(self,
@@ -526,7 +536,7 @@ class ControllerFactory:
         return (self.getBasicBuilder(stepperMotor, None, None, stepsMode=stepsMode)
                 .withAdafruitDriver(adafruitDriver)
                 .withTorqueCurve(transformations)
-                .withExponentialAcceleration()
+                .withCustomTorqueCurveAccelerationAcceleration()
                 .buildAdafruitStepperDriverAdapter())
 
     def getInteractiveAdafruitStepperWith(self, stepperMotor, minSpeedDelta, minPps,
@@ -538,7 +548,7 @@ class ControllerFactory:
                 .buildAdafruitStepperDriverAdapter())
 
     @abstractmethod
-    def addNavigationStyle(self, builder: ControllerBuilder) -> ControllerBuilder:
+    def addNavigationStyle(self, builder: ControllerBuilder, syncNavigationMultitonKey=0) -> ControllerBuilder:
         pass
 
 class StaticControllerFactory(ControllerFactory):
@@ -548,7 +558,7 @@ class StaticControllerFactory(ControllerFactory):
     def getNavigation(self):
         return StaticNavigation()
 
-    def addNavigationStyle(self, builder: ControllerBuilder):
+    def addNavigationStyle(self, builder: ControllerBuilder, syncNavigationMultitonKey=0):
         return builder.withNavigationStyleStatic()
 
 class DynamicControllerFactory(ControllerFactory):
@@ -558,7 +568,7 @@ class DynamicControllerFactory(ControllerFactory):
     def getNavigation(self):
         return DynamicNavigation()
 
-    def addNavigationStyle(self, builder: ControllerBuilder):
+    def addNavigationStyle(self, builder: ControllerBuilder, syncNavigationMultitonKey=0):
         return builder.withNavigationStyleDynamic()
 
 class SynchronizedControllerFactory(ControllerFactory):
@@ -567,10 +577,10 @@ class SynchronizedControllerFactory(ControllerFactory):
         return DynamicDelayPlanner()
 
     def getNavigation(self):
-        return BasicSynchronizedNavigation()
+        return BasicSynchronizedNavigation.getInstance()
 
-    def addNavigationStyle(self, builder: ControllerBuilder):
-        return builder.withNavigationStyleSynchronized()
+    def addNavigationStyle(self, builder: ControllerBuilder, syncNavigationMultitonKey=0):
+        return builder.withNavigationStyleSynchronized(syncNavigationMultitonKey)
 
 
 class MultiProcessingControllerFactory(SynchronizedControllerFactory):
@@ -589,6 +599,9 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
     def withDriverBuilder(self, builder: ControllerBuilder, builderMethodRef):
         # Todo: test if breaks.
         self._factoryOrders.append((builder, builderMethodRef))
+        # Uses buider.clientMultiprocessObserver
+        self._clientMultiprocessObservers.append(None)
+        return self
 
     def withDriver(self, factoryFnReference: Callable, multiprocessObserver: MultiprocessObserver = None,
                    *args, **kwargs) -> 'MultiProcessingControllerFactory':
@@ -604,38 +617,40 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         self._clientMultiprocessObservers.append(multiprocessObserver)
         return self
 
-    def spawn(self, withBasicSynchronizedNavigationMultitonKey=0):
+    def spawn(self, syncNavigationMultitonKey=0):
         """
         @param withBasicSynchronizedNavigationMultitonKey: In case you need to coordinate a group of motors per
                                                            process, they'll need one instance of
                                                            BasicSynchronizedNavigation each to avoid conflicts with the
                                                            latch. MainProcess will have keyed instances, Child process
                                                            one instance each.
-        @return:
+        @return: A list of proxy drivers you can use on MainProcess to send stepping jobs to counterpart drivers in
+        child process.        
         """
-        syncNavigationCountDownLatch = (BasicSynchronizedNavigation(
-                    newMultitonKey=withBasicSynchronizedNavigationMultitonKey)
+        syncNavigationCountDownLatch = (BasicSynchronizedNavigation.getInstance(
+                    newMultitonKey=syncNavigationMultitonKey)
                 .getCountDownLatch(default=Value('i', 0)))
         if isinstance(syncNavigationCountDownLatch, BasicSynchronizedNavigation.CountDownLatch):
             raise RuntimeError("BasicSynchronizedNavigation.CountDownLatch already initialized as mono-process")
 
-        """
-        @return: A list of proxy drivers you can use on MainProcess to send stepGpioPing jobs to counterpart drivers in
-        child process.
-        """
         if self._clientMultiprocessObservers:
             assert len(self._clientMultiprocessObservers) == len(self._factoryOrders)
 
         queues = []
         sharedMemories = []
         for i, order in enumerate(self._factoryOrders):
-            sharedLock = Lock()
             sharedMemory = []
             # Position updates
+            sharedLock = Lock()
             positionValue = Value(DriverSharedPositionStruct, 0, 0, lock=True)
             sharedMemory.extend([sharedLock, positionValue])
             if self._clientMultiprocessObservers:
-                sharedMemory.append(self._clientMultiprocessObservers[i])
+                if isinstance(order[0], ControllerBuilder):
+                    builder = order[0]
+                    observer = builder.clientMultiprocessObserver
+                    sharedMemory.append(observer)
+                else:
+                    sharedMemory.append(self._clientMultiprocessObservers[i])
 
             # Worker Queue
             queues.append(MpQueue())
@@ -643,7 +658,9 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
 
         eventsMultiprocessObserver = self.eventDispatcher.getMultiprocessObserver()
 
-        proxies = self.Unpacker.doUnpack(self._factoryOrders, queues, sharedMemories, isProxy=True)
+        proxies = self.Unpacker.doUnpack(self._factoryOrders, queues, sharedMemories, isProxy=True,
+                                         syncNavigationMultitonKey=syncNavigationMultitonKey)
+
         jobCompletionObservers = [driver.jobCompletionObserver for driver in proxies]
         unpacker = self.Unpacker(self._factoryOrders, queues, sharedMemories, eventsMultiprocessObserver)
         childProcess = Process(target=unpacker.unpack, args=(jobCompletionObservers, syncNavigationCountDownLatch))
@@ -656,213 +673,226 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         return proxies
 
     def getMpCustomTorqueCharacteristicsDRV8825With(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver,
-                                                    stepperMotor, directionGpioPin, stepGpioPin,
+                                                    syncNavigationMultitonKey, stepperMotor, directionGpioPin,
+                                                    stepGpioPin,
                                                     transformations=None,
                                                     sleepGpioPin=None,
                                                     stepsMode="Full",
                                                     modeGpioPins=None,
                                                     enableGpioPin=None,
-                                                    stepGpioPingCompleteEventName="stepGpioPingComplete"):
+                                                    steppingCompleteEventName="steppingComplete"):
 
         return (self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin, stepsMode, modeGpioPins,
-                                     enableGpioPin)
-                    .withMultiprocessArgs(isProxy=isProxy,
-                                          sharedMemory=sharedMemory,
-                                          jobQueue=jobQueue,
-                                          jobCompletionObserver=jobCompletionObserver)
+                                     enableGpioPin, syncNavigationMultitonKey)
+                    .withSharedMemory(sharedMemory)
+                    .withJobQueue(jobQueue)
+                    .withJobCompletionObserver(jobCompletionObserver)
+                    .isMultiprocessProxy(isProxy)
                     .withTorqueCurve(transformations)
-                    .withstepGpioPingCompleteEventName(stepGpioPingCompleteEventName)
+                    .withsteppingCompleteEventName(steppingCompleteEventName)
                     .withCustomTorqueCurveAccelerationAcceleration()
                     .buildDRV8825Driver())
 
-    def getMpLinearDRV8825With(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver, stepperMotor, directionGpioPin,
+    def getMpLinearDRV8825With(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver,
+                               syncNavigationMultitonKey, stepperMotor, directionGpioPin,
                                stepGpioPin,
                                sleepGpioPin=None,
                                stepsMode="Full",
                                modeGpioPins=None,
                                enableGpioPin=None,
-                               stepGpioPingCompleteEventName="stepGpioPingComplete"):
+                               steppingCompleteEventName="steppingComplete"):
         return (self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin, stepsMode, modeGpioPins,
-                                     enableGpioPin)
-                    .withMultiprocessArgs(isProxy=isProxy,
-                                          sharedMemory=sharedMemory,
-                                          jobQueue=jobQueue,
-                                          jobCompletionObserver=jobCompletionObserver)
-                    .withstepGpioPingCompleteEventName(stepGpioPingCompleteEventName)
+                                     enableGpioPin, syncNavigationMultitonKey)
+                    .withSharedMemory(sharedMemory)
+                    .withJobQueue(jobQueue)
+                    .withJobCompletionObserver(jobCompletionObserver)
+                    .isMultiprocessProxy(isProxy)
+                    .withsteppingCompleteEventName(steppingCompleteEventName)
                     .withLinearAcceleration()
                     .buildDRV8825Driver())
 
-    def getMpExponentialDRV8825With(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver, stepperMotor,
+    def getMpExponentialDRV8825With(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver,
+                                    syncNavigationMultitonKey, stepperMotor,
                                     directionGpioPin, stepGpioPin,
                                     sleepGpioPin=None,
                                     stepsMode="Full",
                                     modeGpioPins=None,
                                     enableGpioPin=None,
-                                    stepGpioPingCompleteEventName="stepGpioPingComplete"):
+                                    steppingCompleteEventName="steppingComplete"):
 
         return (self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin, stepsMode, modeGpioPins,
-                                     enableGpioPin)
-                    .withMultiprocessArgs(isProxy=isProxy,
-                                          sharedMemory=sharedMemory,
-                                          jobQueue=jobQueue,
-                                          jobCompletionObserver=jobCompletionObserver)
-                    .withstepGpioPingCompleteEventName(stepGpioPingCompleteEventName)
+                                     enableGpioPin, syncNavigationMultitonKey)
+                    .withSharedMemory(sharedMemory)
+                    .withJobQueue(jobQueue)
+                    .withJobCompletionObserver(jobCompletionObserver)
+                    .isMultiprocessProxy(isProxy)
+                    .withsteppingCompleteEventName(steppingCompleteEventName)
                     .withExponentialAcceleration()
                     .buildDRV8825Driver())
 
     def getMpCustomTorqueCharacteristicsTMC2209With(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver,
-                                                    stepperMotor, directionGpioPin, stepGpioPin,
+                                                    syncNavigationMultitonKey, stepperMotor, directionGpioPin,
+                                                    stepGpioPin,
                                                     transformations=None,
                                                     stepsMode="1/8",
                                                     modeGpioPins=None,
                                                     enableGpioPin=None,
-                                                    stepGpioPingCompleteEventName="stepGpioPingComplete"):
+                                                    steppingCompleteEventName="steppingComplete"):
 
-        return (self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
-                                     enableGpioPin=enableGpioPin)
-                    .withMultiprocessArgs(isProxy=isProxy,
-                                          sharedMemory=sharedMemory,
-                                          jobQueue=jobQueue,
-                                          jobCompletionObserver=jobCompletionObserver)
-                    .withstepGpioPingCompleteEventName(stepGpioPingCompleteEventName)
+        return (self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, stepsMode=stepsMode,
+                                     modeGpioPins=modeGpioPins, enableGpioPin=enableGpioPin,
+                                     syncNavigationMultitonKey=syncNavigationMultitonKey)
+                    .withSharedMemory(sharedMemory)
+                    .withJobQueue(jobQueue)
+                    .withJobCompletionObserver(jobCompletionObserver)
+                    .isMultiprocessProxy(isProxy)
+                    .withsteppingCompleteEventName(steppingCompleteEventName)
                     .withTorqueCurve(transformations)
                     .withCustomTorqueCurveAccelerationAcceleration()
                     .buildTMC2209StandaloneDriver())
 
     def getMpLinearTMC2209With(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver,
-                               stepperMotor, directionGpioPin, stepGpioPin,
+                               syncNavigationMultitonKey, stepperMotor, directionGpioPin, stepGpioPin,
                                stepsMode="1/8",
                                modeGpioPins=None,
                                enableGpioPin=None,
-                               stepGpioPingCompleteEventName="stepGpioPingComplete"):
-        return (
-            self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
-                                 enableGpioPin=enableGpioPin)
-                .withMultiprocessArgs(isProxy=isProxy,
-                                      sharedMemory=sharedMemory,
-                                      jobQueue=jobQueue,
-                                      jobCompletionObserver=jobCompletionObserver)
-                .withstepGpioPingCompleteEventName(stepGpioPingCompleteEventName)
-                .withLinearAcceleration()
-                .buildTMC2209StandaloneDriver())
+                               steppingCompleteEventName="steppingComplete"):
+        return (self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, stepsMode=stepsMode,
+                                     modeGpioPins=modeGpioPins, enableGpioPin=enableGpioPin,
+                                     syncNavigationMultitonKey=syncNavigationMultitonKey)
+                    .withSharedMemory(sharedMemory)
+                    .withJobQueue(jobQueue)
+                    .withJobCompletionObserver(jobCompletionObserver)
+                    .isMultiprocessProxy(isProxy)
+                    .withsteppingCompleteEventName(steppingCompleteEventName)
+                    .withLinearAcceleration()
+                    .buildTMC2209StandaloneDriver())
 
-    def getMpExponentialTMC2209With(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver, stepperMotor,
+    def getMpExponentialTMC2209With(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver,
+                                    syncNavigationMultitonKey, stepperMotor,
                                     directionGpioPin, stepGpioPin,
                                     stepsMode="1/8",
                                     modeGpioPins=None,
                                     enableGpioPin=None,
-                                    stepGpioPingCompleteEventName="stepGpioPingComplete"):
+                                    steppingCompleteEventName="steppingComplete"):
         return (
-            self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, stepsMode=stepsMode, modeGpioPins=modeGpioPins,
-                                 enableGpioPin=enableGpioPin)
-                .withMultiprocessArgs(isProxy=isProxy,
-                                      sharedMemory=sharedMemory,
-                                      jobQueue=jobQueue,
-                                      jobCompletionObserver=jobCompletionObserver)
-                .withstepGpioPingCompleteEventName(stepGpioPingCompleteEventName)
-                .withExponentialAcceleration()
-                .buildTMC2209StandaloneDriver())
+            self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, stepsMode=stepsMode,
+                                 modeGpioPins=modeGpioPins, enableGpioPin=enableGpioPin,
+                                 syncNavigationMultitonKey=syncNavigationMultitonKey)
+                    .withSharedMemory(sharedMemory)
+                    .withJobQueue(jobQueue)
+                    .withJobCompletionObserver(jobCompletionObserver)
+                    .isMultiprocessProxy(isProxy)
+                    .withsteppingCompleteEventName(steppingCompleteEventName)
+                    .withExponentialAcceleration()
+                    .buildTMC2209StandaloneDriver())
 
     def getMpCustomTorqueCharacteristicsUnipolarDriverWith(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver,
-                                                           stepperMotor, directionGpioPin, stepGpioPin,
+                                                           syncNavigationMultitonKey, stepperMotor, directionGpioPin,
+                                                           stepGpioPin,
                                                            transformations=None,
                                                            sleepGpioPin=None,
                                                            stepsMode="Full",
                                                            enableGpioPin=None,
-                                                           stepGpioPingCompleteEventName="stepGpioPingComplete"):
-        return (
-            self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, stepsMode=stepsMode, sleepGpioPin=sleepGpioPin,
-                                 enableGpioPin=enableGpioPin)
-                .withMultiprocessArgs(isProxy=isProxy,
-                                      sharedMemory=sharedMemory,
-                                      jobQueue=jobQueue,
-                                      jobCompletionObserver=jobCompletionObserver)
-                .withstepGpioPingCompleteEventName(stepGpioPingCompleteEventName)
-                .withTorqueCurve(transformations)
-                .withCustomTorqueCurveAccelerationAcceleration()
-                .buildUnipolarDriver())
+                                                           steppingCompleteEventName="steppingComplete"):
+        return (self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, stepsMode=stepsMode,
+                                     sleepGpioPin=sleepGpioPin, enableGpioPin=enableGpioPin,
+                                     syncNavigationMultitonKey=syncNavigationMultitonKey)
+                    .withSharedMemory(sharedMemory)
+                    .withJobQueue(jobQueue)
+                    .withJobCompletionObserver(jobCompletionObserver)
+                    .isMultiprocessProxy(isProxy)
+                    .withsteppingCompleteEventName(steppingCompleteEventName)
+                    .withTorqueCurve(transformations)
+                    .withCustomTorqueCurveAccelerationAcceleration()
+                    .buildUnipolarDriver())
 
-    def getMpLinearUnipolarDriverWith(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver, stepperMotor,
+    def getMpLinearUnipolarDriverWith(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver,
+                                      syncNavigationMultitonKey, stepperMotor,
                                       directionGpioPin, stepGpioPin,
                                       sleepGpioPin=None,
                                       stepsMode="Full",
                                       enableGpioPin=None,
-                                      stepGpioPingCompleteEventName="stepGpioPingComplete"):
-        return (
-            self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, stepsMode=stepsMode, sleepGpioPin=sleepGpioPin,
-                                 enableGpioPin=enableGpioPin)
-                .withMultiprocessArgs(isProxy=isProxy,
-                                      sharedMemory=sharedMemory,
-                                      jobQueue=jobQueue,
-                                      jobCompletionObserver=jobCompletionObserver)
-                .withstepGpioPingCompleteEventName(stepGpioPingCompleteEventName)
-                .withLinearAcceleration()
-                .buildUnipolarDriver())
+                                      steppingCompleteEventName="steppingComplete"):
+        return (self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, stepsMode=stepsMode,
+                                     sleepGpioPin=sleepGpioPin, enableGpioPin=enableGpioPin,
+                                     syncNavigationMultitonKey=syncNavigationMultitonKey)
+                    .withSharedMemory(sharedMemory)
+                    .withJobQueue(jobQueue)
+                    .withJobCompletionObserver(jobCompletionObserver)
+                    .isMultiprocessProxy(isProxy)
+                    .withsteppingCompleteEventName(steppingCompleteEventName)
+                    .withLinearAcceleration()
+                    .buildUnipolarDriver())
 
-    def getMpExponentialUnipolarDriverWith(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver, stepperMotor,
+    def getMpExponentialUnipolarDriverWith(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver,
+                                           syncNavigationMultitonKey, stepperMotor,
                                            directionGpioPin, stepGpioPin,
                                            sleepGpioPin=None,
                                            stepsMode="Full",
                                            enableGpioPin=None,
-                                           stepGpioPingCompleteEventName="stepGpioPingComplete"):
-        return (
-            self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, stepsMode=stepsMode, sleepGpioPin=sleepGpioPin,
-                                 enableGpioPin=enableGpioPin)
-                .withMultiprocessArgs(isProxy=isProxy,
-                                      sharedMemory=sharedMemory,
-                                      jobQueue=jobQueue,
-                                      jobCompletionObserver=jobCompletionObserver)
-                .withstepGpioPingCompleteEventName(stepGpioPingCompleteEventName)
-                .withExponentialAcceleration()
-                .buildUnipolarDriver())
+                                           steppingCompleteEventName="steppingComplete"):
+        return (self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, stepsMode=stepsMode,
+                                     sleepGpioPin=sleepGpioPin, enableGpioPin=enableGpioPin,
+                                     syncNavigationMultitonKey=syncNavigationMultitonKey)
+                    .withSharedMemory(sharedMemory)
+                    .withJobQueue(jobQueue)
+                    .withJobCompletionObserver(jobCompletionObserver)
+                    .isMultiprocessProxy(isProxy)
+                    .withsteppingCompleteEventName(steppingCompleteEventName)
+                    .withExponentialAcceleration()
+                    .buildUnipolarDriver())
 
     def getMpCustomTorqueCharacteristicsAdafruitStepperWith(self, jobQueue, sharedMemory, isProxy,
-                                                            jobCompletionObserver, stepperMotor,
+                                                            jobCompletionObserver,
+                                                            syncNavigationMultitonKey, stepperMotor,
                                                             adafruitStepperDriver: AdafruitStepperDriver,
                                                             transformations=None,
                                                             stepsMode="Full",
-                                                            stepGpioPingCompleteEventName="stepGpioPingComplete"):
-        return (
-            self.getBasicBuilder(stepperMotor, None, None, stepsMode=stepsMode)
-                .withMultiprocessArgs(isProxy=isProxy,
-                                      sharedMemory=sharedMemory,
-                                      jobQueue=jobQueue,
-                                      jobCompletionObserver=jobCompletionObserver)
-                .withAdafruitDriver(adafruitStepperDriver)
-                .withstepGpioPingCompleteEventName(stepGpioPingCompleteEventName)
-                .withTorqueCurve(transformations)
-                .withLinearAcceleration()
-                .buildAdafruitStepperDriverAdapter())
+                                                            steppingCompleteEventName="steppingComplete"):
+        return (self.getBasicBuilder(stepperMotor, None, None, stepsMode=stepsMode,
+                                     syncNavigationMultitonKey=syncNavigationMultitonKey)
+                    .withSharedMemory(sharedMemory)
+                    .withJobQueue(jobQueue)
+                    .withJobCompletionObserver(jobCompletionObserver)
+                    .isMultiprocessProxy(isProxy)
+                    .withAdafruitDriver(adafruitStepperDriver)
+                    .withsteppingCompleteEventName(steppingCompleteEventName)
+                    .withTorqueCurve(transformations)
+                    .withLinearAcceleration()
+                    .buildAdafruitStepperDriverAdapter())
 
-    def getMpLinearAdafruitStepperWith(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver, stepperMotor,
+    def getMpLinearAdafruitStepperWith(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver,
+                                       syncNavigationMultitonKey, stepperMotor,
                                        adafruitStepperDriver: AdafruitStepperDriver,
                                        stepsMode="Full",
-                                       stepGpioPingCompleteEventName="stepGpioPingComplete"):
-        return (
-            self.getBasicBuilder(stepperMotor, None, None, stepsMode=stepsMode)
-                .withMultiprocessArgs(isProxy=isProxy,
-                                      sharedMemory=sharedMemory,
-                                      jobQueue=jobQueue,
-                                      jobCompletionObserver=jobCompletionObserver)
-                .withAdafruitDriver(adafruitStepperDriver)
-                .withstepGpioPingCompleteEventName(stepGpioPingCompleteEventName)
-                .withLinearAcceleration()
-                .buildAdafruitStepperDriverAdapter())
+                                       steppingCompleteEventName="steppingComplete"):
+        return (self.getBasicBuilder(stepperMotor, None, None, stepsMode=stepsMode,
+                                     syncNavigationMultitonKey=syncNavigationMultitonKey)
+                    .withSharedMemory(sharedMemory)
+                    .withJobQueue(jobQueue)
+                    .withJobCompletionObserver(jobCompletionObserver)
+                    .isMultiprocessProxy(isProxy)
+                    .withAdafruitDriver(adafruitStepperDriver)
+                    .withsteppingCompleteEventName(steppingCompleteEventName)
+                    .withLinearAcceleration()
+                    .buildAdafruitStepperDriverAdapter())
 
-    def getMpExponentialAdafruitStepperWith(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver, stepperMotor,
+    def getMpExponentialAdafruitStepperWith(self, jobQueue, sharedMemory, isProxy, jobCompletionObserver,
+                                            syncNavigationMultitonKey, stepperMotor,
                                             adafruitStepperDriver: AdafruitStepperDriver,
                                             stepsMode="Full",
-                                            stepGpioPingCompleteEventName="stepGpioPingComplete"):
-        return (
-            self.getBasicBuilder(stepperMotor, None, None, stepsMode=stepsMode)
-                .withMultiprocessArgs(isProxy=isProxy,
-                                      sharedMemory=sharedMemory,
-                                      jobQueue=jobQueue,
-                                      jobCompletionObserver=jobCompletionObserver)
-                .withAdafruitDriver(adafruitStepperDriver)
-                .withstepGpioPingCompleteEventName(stepGpioPingCompleteEventName)
-                .withExponentialAcceleration()
-                .buildAdafruitStepperDriverAdapter())
+                                            steppingCompleteEventName="steppingComplete"):
+        return (self.getBasicBuilder(stepperMotor, None, None, stepsMode=stepsMode,
+                                     syncNavigationMultitonKey=syncNavigationMultitonKey)
+                    .withSharedMemory(sharedMemory)
+                    .withJobQueue(jobQueue)
+                    .withJobCompletionObserver(jobCompletionObserver)
+                    .isMultiprocessProxy(isProxy)
+                    .withAdafruitDriver(adafruitStepperDriver)
+                    .withsteppingCompleteEventName(steppingCompleteEventName)
+                    .withExponentialAcceleration()
+                    .buildAdafruitStepperDriverAdapter())
 
     class Unpacker:
         def __init__(self, factoryOrders, queues: list, sharedMemories: list, eventMultiprocessObserver):
@@ -880,8 +910,8 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
             print(f"Unpacking in child process!! {self.factoryOrders} {self.queues} {self.sharedMemories}")
             # Removing Singletons instances in case its state was cloned from Parent Process:
             EventDispatcher._instance = None
-            BasicSynchronizedNavigation._instance = {}
-            BasicSynchronizedNavigation(countDownLatch=syncNavigationCountDownLatch)
+            BasicSynchronizedNavigation._instances = {}
+            BasicSynchronizedNavigation.getInstance(countDownLatch=syncNavigationCountDownLatch)
             DynamicDelayPlanner.Rest._instance = None
             DynamicDelayPlanner.Steady._instance = None
             DynamicDelayPlanner.RampingUp._instance = None
@@ -893,21 +923,41 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
                    self.eventDispatcher._shouldDispatchToParentProcess, jobCompletionObservers)
             drivers = self.doUnpack(self.factoryOrders, self.queues, self.sharedMemories, isProxy=False,
                                     jobCompletionObservers=jobCompletionObservers)
+            flush_streams_if_not_empty()
             # block main forever.
             drivers.pop().workerFuture.result()
 
         @staticmethod
-        def doUnpack(factoryOrders, queues, sharedMemories, isProxy, jobCompletionObservers=None) -> list[MotorDriver]:
+        def doUnpack(factoryOrders, queues, sharedMemories, isProxy, jobCompletionObservers=None,
+                     syncNavigationMultitonKey=0) \
+                -> list[MotorDriver]:
             drivers = []
             for index, order in enumerate(factoryOrders):
                 if isinstance(order[0], ControllerBuilder):
-                    drivers.append(order[1]())
+                    # jobCompletionObservers[index] should be None as the Builder has (or not) a reference to it.
+                    builder: ControllerBuilder = order[0]
+                    (builder.isMultiprocessProxy(isProxy)
+                            .withJobQueue(queues[index])
+                            .withSharedMemory(sharedMemories[index]))
+                    if isinstance(builder.navigation, BasicSynchronizedNavigation):
+                        # Make sure driers that are synched use the right multiton instance.
+                        builder.navigation = BasicSynchronizedNavigation.getInstance(
+                                newMultitonKey=syncNavigationMultitonKey)
+
+                    if jobCompletionObservers:
+                        builder.withJobCompletionObserver(jobCompletionObservers[index])
+
+                    # Unique scenario, builder can build same Driver twice, if each lives in a different process.
+                    builder.built = False
+                    driver = order[1]()
+                    drivers.append(driver)
                 elif jobCompletionObservers:
-                    drivers.append(
-                        order[0](queues[index], sharedMemories[index], isProxy, jobCompletionObservers[index],
-                                 *order[1][0], **order[1][1]))
+                    driver = order[0](queues[index], sharedMemories[index], isProxy, jobCompletionObservers[index],
+                                      syncNavigationMultitonKey, *order[1][0], **order[1][1])
+                    drivers.append(driver)
                 else:
-                    drivers.append(
-                        order[0](queues[index], sharedMemories[index], isProxy, None,
-                                 *order[1][0], **order[1][1]))
+                    driver = order[0](queues[index], sharedMemories[index], isProxy, None,
+                                      syncNavigationMultitonKey, *order[1][0], **order[1][1])
+                    drivers.append(driver)
+                tprint(driver)
             return drivers
