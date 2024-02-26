@@ -157,7 +157,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
         Singleton
         """
         if newMultitonKey not in cls._instance:
-            instance = super(BasicSynchronizedNavigation, cls).__new__(cls, high, low, countDownLatch, newMultitonKey)
+            instance = super(BasicSynchronizedNavigation, cls).__new__(cls)
             cls._instance[newMultitonKey] = instance
         return cls._instance[newMultitonKey]
 
