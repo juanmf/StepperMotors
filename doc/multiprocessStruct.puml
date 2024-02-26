@@ -33,9 +33,9 @@ setUpProcess(self) -> 'MultiProcessingControllerFactory':
 withDriver(self, multiprocessObserver: MultiprocessObserver,
 spawn(self):
 
-getMpCustomTorqueCharacteristicsDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionPin, stepPin,
-getMpLinearDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionPin, stepPin,
-getMpExponentialDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionPin, stepPin,
+getMpCustomTorqueCharacteristicsDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionGpioPin, stepGpioPin,
+getMpLinearDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionGpioPin, stepGpioPin,
+getMpExponentialDRV8825With(self, queue, sharedMemory, isProxy, stepperMotor, directionGpioPin, stepGpioPin,
 }
 
 note right: Creates Driver in child process and \n proxy driver in parent process
