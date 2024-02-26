@@ -586,6 +586,10 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         self._clientMultiprocessObservers = []
         return self
 
+    def withDriverBuilder(self, builder: ControllerBuilder, builderMethodRef):
+        # Todo: test if breaks.
+        self._factoryOrders.append((builder, builderMethodRef))
+
     def withDriver(self, factoryFnReference: Callable, multiprocessObserver: MultiprocessObserver = None,
                    *args, **kwargs) -> 'MultiProcessingControllerFactory':
         """
@@ -895,7 +899,9 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         def doUnpack(factoryOrders, queues, sharedMemories, isProxy, jobCompletionObservers=None) -> list[MotorDriver]:
             drivers = []
             for index, order in enumerate(factoryOrders):
-                if jobCompletionObservers:
+                if isinstance(order[0], ControllerBuilder):
+                    drivers.append(order[1]())
+                elif jobCompletionObservers:
                     drivers.append(
                         order[0](queues[index], sharedMemories[index], isProxy, jobCompletionObservers[index],
                                  *order[1][0], **order[1][1]))

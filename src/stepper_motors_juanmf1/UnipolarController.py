@@ -27,7 +27,11 @@ class UnipolarMotorDriver(BipolarStepperMotorDriver):
                  jobCompletionObserver=None,
                  workerName=None):
 
-        assert stepsMode in UnipolarMotorDriver.Sequence.SUPPORTED_MICROSTEPS
+        if stepsMode is None:
+            # Builders might set this to None.
+            stepsMode = self.DEFAULT_STEPPING_MODE,
+        else:
+            assert stepsMode in UnipolarMotorDriver.Sequence.SUPPORTED_MICROSTEPS
         super().__init__(stepperMotor=stepperMotor,
                          accelerationStrategy=accelerationStrategy,
                          navigation=navigation,

@@ -578,6 +578,10 @@ class DRV8825MotorDriver(BipolarStepperMotorDriver):
         @param modeGpioPins: [MODE_0..2]
         @param enableGpioPin: [EN] LOW = enabled; HIGH chip disabled
         """
+        if stepsMode is None:
+            # Builders might set this to None.
+            stepsMode = BipolarStepperMotorDriver.DEFAULT_STEPPING_MODE,
+
         super().__init__(stepperMotor=stepperMotor,
                          accelerationStrategy=accelerationStrategy,
                          navigation=navigation,
@@ -731,6 +735,14 @@ class TMC2209StandaloneMotorDriver(BipolarStepperMotorDriver):
                  isProxy=False,
                  steppingCompleteEventName="steppingComplete",
                  jobCompletionObserver=None):
+
+        if stepsMode is None:
+            # Builders might set this to None.
+            stepsMode = self.DEFAULT_STEPPING_MODE,
+        elif not (stepsMode == self.DEFAULT_STEPPING_MODE or modeGpioPins):
+            tprint(f"Warning: {workerName} needs modeGpioPins set unless it's set by hardware."
+                   "stepsMode does not match default stepping Mode")
+
         super().__init__(stepperMotor=stepperMotor,
                          accelerationStrategy=accelerationStrategy,
                          navigation=navigation,
@@ -746,10 +758,6 @@ class TMC2209StandaloneMotorDriver(BipolarStepperMotorDriver):
                          sharedMemory=sharedMemory,
                          isProxy=isProxy,
                          jobCompletionObserver=jobCompletionObserver)
-
-        if not(stepsMode == self.DEFAULT_STEPPING_MODE or modeGpioPins):
-            tprint(f"Warning: {workerName} needs modeGpioPins set unless it's set by hardware."
-                   "stepsMode does not match default stepping Mode")
 
         self.spreadGpioPin = spreadGpioPin
 
