@@ -50,6 +50,10 @@ class AdafruitStepperDriverAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter)
                  steppingCompleteEventName="steppingComplete",
                  jobCompletionObserver=None):
 
+        if stepsMode is None:
+            # Builders might set this to None.
+            stepsMode = self.DEFAULT_STEPPING_MODE,
+
         assert adafruitDriver and stepperMotor and accelerationStrategy and navigation
         # Adafruit allows for any pair > 2 microsteps, Here it's limited to 2**n <= 128
         assert not adafruitDriver._microsteps or adafruitDriver._microsteps == self.RESOLUTION[stepsMode], \
