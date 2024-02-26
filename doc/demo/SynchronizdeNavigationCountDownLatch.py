@@ -20,7 +20,7 @@ builder2 = (ControllerBuilder.getBasicBuilder(motor2, directionGpioPin=8, stepGp
 controller2 = builder2.buildTMC2209StandaloneDriver()
 
 # Singleton, constructor returns only instance
-navigation: BasicSynchronizedNavigation = BasicSynchronizedNavigation()  # Equivalent to `controller2.navigation`
+navigation: BasicSynchronizedNavigation = BasicSynchronizedNavigation.getInstance()  # Equivalent to `controller2.navigation`
 navigation.setCountDown(2)
 
 # Both motors should start together
@@ -35,8 +35,8 @@ Each child process will hae only one singleton.
 This is worked around by making BasicSynchronizedNavigation a keyed multiton.
 """
 
-nav1 = BasicSynchronizedNavigation(newMultitonKey=0)
-nav2 = BasicSynchronizedNavigation(newMultitonKey=1)
+nav1 = BasicSynchronizedNavigation.getInstance(newMultitonKey=0)
+nav2 = BasicSynchronizedNavigation.getInstance(newMultitonKey=1)
 
 motor1_1 = Nema17_42Ncm_17HS4401(loaded=True)
 motor1_2 = GenericStepper.Builder().copy(motor1)
