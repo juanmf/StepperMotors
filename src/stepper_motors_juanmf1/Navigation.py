@@ -184,7 +184,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
 
     def getCountDownLatch(self, default: CountDownLatch or Value = None):
         if self.countDownLatch is None:
-            self.countDownLatch = default
+            self.countDownLatch = default if default else BasicSynchronizedNavigation.CountDownLatch()
         return self.countDownLatch
 
     def setCountDown(self, value):

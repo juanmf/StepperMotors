@@ -17,7 +17,7 @@ class AccelerationStrategy:
                              steady
         :param rampSteps: How many steps it takes to ramp the motor. It assumes same number of steps to ramp up or down
         """
-        self.realDirection = None
+        self.realDirection = 0
         # Todo: evaluate having rampUpSteps & rampDownSteps as it might differ.
         self.rampSteps = rampSteps
 
@@ -54,7 +54,7 @@ class AccelerationStrategy:
         Signal from client code motor is done working. Reset to initial values.
         """
         self.delayPlanner.done()
-        self.realDirection = None
+        self.realDirection = 0
         # Keeps track of speed, in terms of pps, and direction (-, +) useful for momentum considerations.
         self.currentPps = self.minPps
         # Should start at max sleep time, override in subclasses.
