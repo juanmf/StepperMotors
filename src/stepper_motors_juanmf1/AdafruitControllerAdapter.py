@@ -2,6 +2,8 @@ from RPi import GPIO
 
 import adafruit_motor.stepper as stepper
 from adafruit_motor.stepper import StepperMotor as AdafruitStepperDriver
+from adafruit_motor.stepper import FORWARD, SINGLE, MICROSTEP, INTERLEAVE, DOUBLE
+
 from stepper_motors_juanmf1.AccelerationStrategy import AccelerationStrategy
 
 from stepper_motors_juanmf1.StepperMotor import StepperMotor
@@ -13,11 +15,12 @@ class AdafruitStepperDriverAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter)
     CW = GPIO.HIGH  # Clockwise Rotation
     CCW = GPIO.LOW  # Counterclockwise Rotation
 
-    ADAFRUIT_STYLES = [stepper.SINGLE, stepper.DOUBLE, stepper.MICROSTEP, stepper.INTERLEAVE]
+    ADAFRUIT_STYLES = {SINGLE: 'Full', DOUBLE: 'Full', MICROSTEP: None, INTERLEAVE: 'Half'}
 
     # Mode pins are static, as they are shared among Turret motors.
     RESOLUTION = {'Full': 1,
                   'Half': 2,
+                  '1/2': 2,
                   '1/4': 4,
                   '1/8': 8,
                   '1/16': 16,  # Default when style is microstep
@@ -26,7 +29,18 @@ class AdafruitStepperDriverAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter)
                   '1/128': 128,
                   }
 
-    DEFAULT_STEPPING_MODE = '1/16'
+    MICROSTEP_MAP = {
+        2: 'Half',
+        4: '1/4',
+        8: '1/8',
+        16: '1/16',
+        32: '1/32',
+        64: '1/64',
+        128: '1/128',
+    }
+
+    # Even though the default is 16 micro-steps per steps, Adafruit does that internally, one step is always one step.
+    DEFAULT_STEPPING_MODE = 'Full'
 
     # DRV8825 uses min 10 microseconds HIGH for STEP pin.
     # Raspberry Pi sleeps (in % of desired time) increasingly longer the lower the time goes.
@@ -50,33 +64,22 @@ class AdafruitStepperDriverAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter)
                  steppingCompleteEventName="steppingComplete",
                  jobCompletionObserver=None):
 
-        if stepsMode is None:
-            # Builders might set this to None.
-            stepsMode = self.DEFAULT_STEPPING_MODE,
-
-        assert adafruitDriver and stepperMotor and accelerationStrategy and navigation
-        # Adafruit allows for any pair > 2 microsteps, Here it's limited to 2**n <= 128
-        assert not adafruitDriver._microsteps or adafruitDriver._microsteps == self.RESOLUTION[stepsMode], \
-            "When configuring microsteps in Adafruit, need to make is consistent with stepsMode provided."
-
+        self.adafruitDriver: AdafruitStepperDriver = adafruitDriver
+        self.stepsMode = stepsMode
+        self.adafruitStyle = self.determineSteppingStyle(stepsMode)
         super().__init__(stepperMotor=stepperMotor,
                          accelerationStrategy=accelerationStrategy,
                          navigation=navigation,
                          directionGpioPin=None,
                          stepGpioPin=None,
                          useHoldingTorque=useHoldingTorque,
-                         stepsMode=stepsMode,
+                         stepsMode=self.stepsMode,
                          steppingCompleteEventName=steppingCompleteEventName,
                          jobQueue=jobQueue,
                          workerName=workerName,
                          sharedMemory=sharedMemory,
                          isProxy=isProxy,
                          jobCompletionObserver=jobCompletionObserver)
-
-        # Use self.useHoldingTorque to toggle (or not) enabled before and after stepping.
-        self.enableGpioPin = True
-        self.adafruitDriver = adafruitDriver
-        self.adafruitStyle = self.determineSteppingStyle(stepsMode)
 
     def _initGpio(self, stepsMode):
         pass
@@ -101,7 +104,51 @@ class AdafruitStepperDriverAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter)
             self.adafruitDriver.release()
 
     def determineSteppingStyle(self, stepsMode):
+        """
+        Adafruit drier allows for:
+          implicit microstepping: call oneStep() for one actual motor step, but does n _microsteps transparently.
+          explicit microstepping: call oneStep(style=MICROSTEP) once every micro step, e.g. 16 times for one motor step.
+          full or half steps: <style>:[stepper.SINGLE, stepper.DOUBLE, stepper.MICROSTEP, stepper.INTERLEAVE] call
+            oneStep(style=<style>) for each:
+               * full step: [stepper.SINGLE, stepper.DOUBLE] (i.e. configures microsteps) (DOUBLE is strength, not steps)
+               * half step: stepper.INTERLEAVE (i.e. configured microsteps // 2)
+
+        @param stepsMode:
+        @return:
+        """
         assert stepsMode in self.ADAFRUIT_STYLES or stepsMode in self.RESOLUTION
-        if stepsMode in self.RESOLUTION:
-            return stepper.MICROSTEP
+        assert self.adafruitDriver._microsteps is None or self.adafruitDriver._microsteps in self.MICROSTEP_MAP
+
+        if stepsMode in self.ADAFRUIT_STYLES:
+            # convert Adafruit's to our values.
+            self.stepsMode = self.ADAFRUIT_STYLES[stepsMode] if stepsMode != MICROSTEP \
+                             else self.MICROSTEP_MAP[self.adafruitDriver._microsteps]
+        else:
+            # convert our values to Adafruit's.
+            if stepsMode in ['Half', '1/2']:
+                stepsMode =  INTERLEAVE
+            elif stepsMode != 'Full':
+                # self.adafruitDriver configures microsteps must match stepsMode
+                stepsMode =  MICROSTEP
+            elif stepsMode == 'Full':
+                # If user wants DOUBLE they need to be explicit about it.
+                stepsMode = SINGLE
+
+        # Full steps from our side either 'Full', stepper.SINGLE or stepper.DOUBLE.
         return stepsMode
+
+    """
+    proxy methods
+    """
+
+    def oneStep(self, *, direction: int = FORWARD, style: int = SINGLE) -> None or int:
+        """
+        Actually returns current microstep
+        @return: current microstep
+        """
+        return self.adafruitDriver.onestep(direction=direction, style=style)
+
+    def release(self) -> None:
+        self.adafruitDriver.release()
+
+

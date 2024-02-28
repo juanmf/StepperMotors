@@ -268,7 +268,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         # unless overriden by useHoldingTorque
         # Never sleeps/disable
         self.useHoldingTorque = useHoldingTorque if useHoldingTorque is not None \
-            else (sleepGpioPin or enableGpioPin) is None
+                                else not (sleepGpioPin is None and enableGpioPin is None)
 
         self._initGpio(stepsMode)
 
