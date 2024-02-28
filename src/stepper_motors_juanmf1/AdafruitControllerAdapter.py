@@ -15,7 +15,8 @@ class AdafruitStepperDriverAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter)
     CW = GPIO.HIGH  # Clockwise Rotation
     CCW = GPIO.LOW  # Counterclockwise Rotation
 
-    ADAFRUIT_STYLES = {SINGLE: 'Full', DOUBLE: 'Full', MICROSTEP: None, INTERLEAVE: 'Half'}
+    ADAFRUIT_STYLES_TO_OURS = {SINGLE: 'Full', DOUBLE: 'Full', MICROSTEP: None, INTERLEAVE: 'Half'}
+    OUR_STYLES_TO_ADAFRUIT = {'Full': SINGLE, 'Half': INTERLEAVE, '1/2': INTERLEAVE}
 
     # Mode pins are static, as they are shared among Turret motors.
     RESOLUTION = {'Full': 1,
@@ -116,24 +117,18 @@ class AdafruitStepperDriverAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter)
         @param stepsMode:
         @return:
         """
-        assert stepsMode in self.ADAFRUIT_STYLES or stepsMode in self.RESOLUTION
+        assert stepsMode in self.ADAFRUIT_STYLES_TO_OURS or stepsMode in self.RESOLUTION
         assert self.adafruitDriver._microsteps is None or self.adafruitDriver._microsteps in self.MICROSTEP_MAP
 
-        if stepsMode in self.ADAFRUIT_STYLES:
+        if stepsMode == MICROSTEP:
+            self.stepsMode = self.MICROSTEP_MAP[self.adafruitDriver._microsteps]
+        elif stepsMode in self.ADAFRUIT_STYLES_TO_OURS:
             # convert Adafruit's to our values.
-            self.stepsMode = self.ADAFRUIT_STYLES[stepsMode] if stepsMode != MICROSTEP \
-                             else self.MICROSTEP_MAP[self.adafruitDriver._microsteps]
+            self.stepsMode = self.ADAFRUIT_STYLES_TO_OURS[stepsMode]
+        elif stepsMode in self.OUR_STYLES_TO_ADAFRUIT:
+            stepsMode = self.OUR_STYLES_TO_ADAFRUIT[stepsMode]
         else:
-            # convert our values to Adafruit's.
-            if stepsMode in ['Half', '1/2']:
-                stepsMode =  INTERLEAVE
-            elif stepsMode != 'Full':
-                # self.adafruitDriver configures microsteps must match stepsMode
-                stepsMode =  MICROSTEP
-            elif stepsMode == 'Full':
-                # If user wants DOUBLE they need to be explicit about it.
-                stepsMode = SINGLE
-
+            stepsMode = MICROSTEP
         # Full steps from our side either 'Full', stepper.SINGLE or stepper.DOUBLE.
         return stepsMode
 
@@ -141,7 +136,7 @@ class AdafruitStepperDriverAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter)
     proxy methods
     """
 
-    def oneStep(self, *, direction: int = FORWARD, style: int = SINGLE) -> None or int:
+    def onestep(self, *, direction: int = FORWARD, style: int = SINGLE) -> None or int:
         """
         Actually returns current microstep
         @return: current microstep
@@ -150,5 +145,3 @@ class AdafruitStepperDriverAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter)
 
     def release(self) -> None:
         self.adafruitDriver.release()
-
-

@@ -323,7 +323,7 @@ class ControllerBuilder:
     def getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin=None,
                         stepsMode="Full",
                         modeGpioPins=None,
-                        enableGpioPin=None):
+                        enableGpioPin=None) -> 'ControllerBuilder':
         return (ControllerBuilder().withPins(directionGpioPin=directionGpioPin, stepGpioPin=stepGpioPin,
                                              enableGpioPin=enableGpioPin, sleepGpioPin=sleepGpioPin)
                  .withStepperMotor(stepperMotor)
