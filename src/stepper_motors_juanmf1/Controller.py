@@ -65,7 +65,7 @@ class MotorDriver(BlockingQueueWorker):
         MotorDriver.INSTANCES_COUNT += 1
         self.stepGpioPin = stepGpioPin
         self.directionGpioPin = directionGpioPin
-        self.stepperMotor = stepperMotor
+        self.stepperMotor: StepperMotor = stepperMotor
         # Tracks current either by position for position based movement (DynamicNavigation, interruptible)
         # or by fixed number of steps (StaticNavigation, uninterruptible).
         self.navigation = navigation
@@ -268,7 +268,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         # unless overriden by useHoldingTorque
         # Never sleeps/disable
         self.useHoldingTorque = useHoldingTorque if useHoldingTorque is not None \
-            else (sleepGpioPin or enableGpioPin) is None
+                                else not (sleepGpioPin is None and enableGpioPin is None)
 
         self._initGpio(stepsMode)
 
@@ -440,7 +440,7 @@ class BipolarStepperMotorDriver(MotorDriver):
                                          maxPpsOverride=maxPpsOverride,
                                          eventInAdvanceSteps=eventInAdvanceSteps)
 
-    def signedSteps(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
+    def signedSteps(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
                     eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
         """
         Creates stepping jobs handled by self._operateStepper.
@@ -470,7 +470,7 @@ class BipolarStepperMotorDriver(MotorDriver):
                                              maxPpsOverride=maxPpsOverride,
                                              eventInAdvanceSteps=eventInAdvanceSteps)
 
-    def stepClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
+    def stepClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
                       eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
         """
         See signedSteps()
@@ -481,7 +481,7 @@ class BipolarStepperMotorDriver(MotorDriver):
             paramsList=[self.CW, steps, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps],
             block=True)
 
-    def stepCounterClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
+    def stepCounterClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
                              eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
         """
         See signedSteps()

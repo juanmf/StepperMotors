@@ -201,33 +201,33 @@ class ControllerBuilder:
 
     def _accelerationStrategyConstructorArgs(self):
         assert self.stepperMotor and self.delayPlanner and self.stepsMode
-        return (self.stepperMotor,
-                self.delayPlanner,
-                BipolarStepperMotorDriver.RESOLUTION_MULTIPLE[self.stepsMode])
+        return {'stepperMotor': self.stepperMotor,
+                'delayPlanner': self.delayPlanner,
+                'steppingModeMultiple': BipolarStepperMotorDriver.RESOLUTION_MULTIPLE[self.stepsMode]}
 
     def withNoAcceleration(self):
-        self.accelerationStrategy = AccelerationStrategy(*self._accelerationStrategyConstructorArgs())
+        self.accelerationStrategy = AccelerationStrategy(**self._accelerationStrategyConstructorArgs())
         return self
 
     def withLinearAcceleration(self):
-        self.accelerationStrategy = LinearAcceleration(*self._accelerationStrategyConstructorArgs())
+        self.accelerationStrategy = LinearAcceleration(**self._accelerationStrategyConstructorArgs())
         return self
 
     def withExponentialAcceleration(self):
-        self.accelerationStrategy = ExponentialAcceleration(*self._accelerationStrategyConstructorArgs())
+        self.accelerationStrategy = ExponentialAcceleration(**self._accelerationStrategyConstructorArgs())
         return self
 
     def withCustomTorqueCurveAccelerationAcceleration(self):
         """
         CustomTorqueCurve refers to max increment in PPS at each PPS from minPPS to maxPPS
         """
-        self.accelerationStrategy = CustomAccelerationPerPps(*self._accelerationStrategyConstructorArgs(),
+        self.accelerationStrategy = CustomAccelerationPerPps(**self._accelerationStrategyConstructorArgs(),
                                                              transformations=self.transformations)
         return self
 
     def withInteractiveAcceleration(self, minSpeedDelta, minPPS):
-        self.accelerationStrategy = InteractiveAcceleration(*self._accelerationStrategyConstructorArgs(),
-                                                            minSpeedDelta, minPPS)
+        self.accelerationStrategy = InteractiveAcceleration(**self._accelerationStrategyConstructorArgs(),
+                                                            minSpeedDelta=minSpeedDelta, minPPS=minPPS)
         return self
 
     def withNavigationStyleStatic(self):
@@ -323,7 +323,7 @@ class ControllerBuilder:
     def getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin=None,
                         stepsMode="Full",
                         modeGpioPins=None,
-                        enableGpioPin=None):
+                        enableGpioPin=None) -> 'ControllerBuilder':
         return (ControllerBuilder().withPins(directionGpioPin=directionGpioPin, stepGpioPin=stepGpioPin,
                                              enableGpioPin=enableGpioPin, sleepGpioPin=sleepGpioPin)
                  .withStepperMotor(stepperMotor)

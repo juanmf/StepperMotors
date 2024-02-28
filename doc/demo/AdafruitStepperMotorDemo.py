@@ -13,7 +13,7 @@ from stepper_motors_juanmf1.StepperMotor import Nema17_42Ncm_17HS4401
 
 from src.stepper_motors_juanmf1.Navigation import BasicSynchronizedNavigation
 
-SUPPORTED_STEPPING_STYLES_OR_MODES = AdafruitStepperAdapter.ADAFRUIT_STYLES + AdafruitStepperAdapter.RESOLUTION.keys()
+SUPPORTED_STEPPING_STYLES_OR_MODES = AdafruitStepperAdapter.ADAFRUIT_STYLES_TO_OURS + AdafruitStepperAdapter.RESOLUTION.keys()
 
 # Threads in same process (inefficient)
 # factory = StaticControllerFactory()        # Non-interruptible stepping jobs

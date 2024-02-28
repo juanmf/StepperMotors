@@ -42,8 +42,9 @@ class Navigation:
     @staticmethod
     def pulseController(controller: MotorDriver):
         controller.pulseStart()
-        controller.usleep(controller.PULSE_TIME_MICROS)
-        controller.pulseStop()
+        if controller.PULSE_TIME_MICROS:
+            controller.usleep(controller.PULSE_TIME_MICROS)
+            controller.pulseStop()
 
     @staticmethod
     def isInterruptible():
@@ -54,11 +55,12 @@ class Navigation:
         # Using pulse time to catch up with user logic and sleepTime computation.
         pulseElapsedUs = (time.monotonic_ns() - pulseStartNs) // 1000
         remainingSleepUs = pulseDurationUs - pulseElapsedUs
-        if remainingSleepUs > 5:
-            # Arbitrarily just continue if remaining sleep time < 5us
+        if remainingSleepUs > 10:
+            # Arbitrarily just continue if remaining sleep time < 10us
             MotorDriver.usleep(remainingSleepUs)
         else:
-            tprint("Warning: Can't process user fn, events and sleepTime calculations within pulse duration.")
+            tprint(f"Warning: Can't process user fn, events and sleepTime calculations within pulse duration. "
+                   f"remainingSleepUs {remainingSleepUs}")
 
 
 class StaticNavigation(Navigation):
@@ -78,6 +80,7 @@ class StaticNavigation(Navigation):
             pulseStart = time.monotonic_ns()
             self.pulseController(controller)
             # Todo: see to make this work with actual position
+            step += 1
             accelerationStrategy.computeSleepTimeUs(step, totalSteps)
             controller.setCurrentPosition(position)
 
@@ -90,6 +93,7 @@ class StaticNavigation(Navigation):
                 EventDispatcher.instance().publishMainLoop(eventName + "Advance", {'position': position})
 
             # Using pulse time to catch up with user logic and sleepTime computation.
+            tprint(f"waitNextCycle(currentSleepTimeUs {accelerationStrategy.currentSleepTimeUs}")
             Navigation.waitNextCycle(pulseStartNs=pulseStart, pulseDurationUs=accelerationStrategy.currentSleepTimeUs)
 
         accelerationStrategy.done()

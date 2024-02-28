@@ -11,6 +11,7 @@ class AccelerationStrategy:
     """
 
     def __init__(self, stepperMotor: StepperMotor, delayPlanner, steppingModeMultiple, rampSteps=None):
+        tprint(f"stepperMotor: {stepperMotor}, steppingModeMultiple {steppingModeMultiple}")
         """
         :param stepperMotor: Stepper to take parameters from, like [min/max]PPS and so on.
         :param delayPlanner: delayPlanner to use to compute sleep time between steps as motor ramps up/down & while
@@ -119,7 +120,7 @@ class LinearAcceleration(AccelerationStrategy):
     """
 
     def __init__(self, stepperMotor: StepperMotor, delayPlanner, steppingModeMultiple, rampSteps=25):
-        super().__init__(stepperMotor, delayPlanner, rampSteps, steppingModeMultiple)
+        super().__init__(stepperMotor, delayPlanner, steppingModeMultiple, rampSteps)
         self.sleepDeltaUs = (self.maxSleepTimeUs - self.minSleepTimeUs) / rampSteps
         self.currentSleepTimeUs = self.maxSleepTimeUs
 
@@ -159,7 +160,8 @@ class ExponentialAcceleration(AccelerationStrategy):
       no acceleration.
     """
     def __init__(self, stepperMotor: StepperMotor, delayPlanner, steppingModeMultiple, initialIncrementFactor=2):
-        super().__init__(stepperMotor, delayPlanner, steppingModeMultiple, None)
+        super().__init__(stepperMotor=stepperMotor, delayPlanner=delayPlanner,
+                         steppingModeMultiple=steppingModeMultiple, rampSteps=None)
         pps = self.maxPps
         self.stepsToBreakCache = [pps]
         # With this formula, breaking takes more steps than accelerating. using breaking to determine rampSteps
@@ -209,7 +211,8 @@ class CustomAccelerationPerPps(AccelerationStrategy):
     see `transformations`.
     """
     def __init__(self, stepperMotor: StepperMotor, delayPlanner, steppingModeMultiple, transformations=None):
-        super().__init__(stepperMotor, delayPlanner, steppingModeMultiple=steppingModeMultiple)
+        super().__init__(stepperMotor=stepperMotor, delayPlanner=delayPlanner,
+                         steppingModeMultiple=steppingModeMultiple)
         """
         Curve of optimal acceleration.
         array of tuples with max speed boost at given PPS starting from stepperMotor.MIN_PPS 
@@ -371,7 +374,8 @@ class InteractiveAcceleration(AccelerationStrategy):
     :func:`~ Benchmark.benchmarkMotor`.
     """
     def __init__(self, stepperMotor, delayPlanner, steppingModeMultiple, minSpeedDelta, minPPS):
-        super().__init__(stepperMotor, delayPlanner, steppingModeMultiple, 25)
+        super().__init__(stepperMotor=stepperMotor, delayPlanner=delayPlanner,
+                         steppingModeMultiple=steppingModeMultiple, rampSteps=25)
         self.minSpeedDelta = int(minSpeedDelta / steppingModeMultiple)
         self.speedDelta = self.minSpeedDelta
         self.minPps = int(minPPS / steppingModeMultiple)
@@ -510,6 +514,7 @@ class StaticDelayPlanner(DelayPlanner):
 
     def computeDelay(self, currentStep, steps, directionChangeListener=None):
         # Smooth (de-)acceleration
+        tprint("StaticDelayPlanner.computeDelay", currentStep, steps)
         self.currentStep, self.steps = currentStep, steps
         if currentStep == 0:
             # Starts with max sleep time unchanged.
