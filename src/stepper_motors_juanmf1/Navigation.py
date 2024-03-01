@@ -93,7 +93,6 @@ class StaticNavigation(Navigation):
                 EventDispatcher.instance().publishMainLoop(eventName + "Advance", {'position': position})
 
             # Using pulse time to catch up with user logic and sleepTime computation.
-            tprint(f"waitNextCycle(currentSleepTimeUs {accelerationStrategy.currentSleepTimeUs}")
             Navigation.waitNextCycle(pulseStartNs=pulseStart, pulseDurationUs=accelerationStrategy.currentSleepTimeUs)
 
         accelerationStrategy.done()

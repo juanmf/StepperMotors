@@ -303,7 +303,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
         def end(self):
             endTime = time.monotonic_ns()
             self.endTime.set_result(time.monotonic_ns())
-            not self.block.done() and self.block.set_result(self.endTime.result())
+            not self.block.done() and self.block.set_result(True)
             return endTime
 
         def result(self):

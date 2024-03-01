@@ -514,7 +514,6 @@ class StaticDelayPlanner(DelayPlanner):
 
     def computeDelay(self, currentStep, steps, directionChangeListener=None):
         # Smooth (de-)acceleration
-        tprint("StaticDelayPlanner.computeDelay", currentStep, steps)
         self.currentStep, self.steps = currentStep, steps
         if currentStep == 0:
             # Starts with max sleep time unchanged.

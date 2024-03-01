@@ -89,7 +89,6 @@ class AdafruitStepperDriverAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter)
         pass
 
     def pulseStart(self, stepRelativeToJobStart=None):
-        tprint(f"onestep {self.currentDirection}")
         self.adafruitDriver.onestep(direction=self.currentDirection, style=self.adafruitStyle)
 
     def pulseStop(self):
