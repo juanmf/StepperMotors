@@ -40,8 +40,8 @@ class Navigation:
         return self.get_completed_future()
 
     @staticmethod
-    def pulseController(controller: MotorDriver):
-        controller.pulseStart()
+    def pulseController(controller: MotorDriver, stepRelativeToJobStart=None):
+        controller.pulseStart(stepRelativeToJobStart)
         if controller.PULSE_TIME_MICROS:
             controller.usleep(controller.PULSE_TIME_MICROS)
             controller.pulseStop()
@@ -72,15 +72,15 @@ class StaticNavigation(Navigation):
         # Todo: find out  if -1 works as LOW (normally set to 0) for direction pin.
         signedDirection = cmp(targetPosition, controller.getCurrentPosition())
         controller.setDirection(signedDirection)
-        controller.accelerationStrategy.realDirection = signedDirection
-
-        step = 0
+        accelerationStrategy.realDirection = signedDirection
+        step = pulseCount = 0
         totalSteps = abs(initialPosition - targetPosition)
         for position in range(initialPosition, targetPosition, signedDirection):
             pulseStart = time.monotonic_ns()
-            self.pulseController(controller)
-            # Todo: see to make this work with actual position
+            self.pulseController(controller, pulseCount)
+            # Todo: see to make this work with actual position, StaticDelayPlanner assumes steps from 0 to totalSteps.
             step += 1
+            pulseCount += accelerationStrategy.realDirection
             accelerationStrategy.computeSleepTimeUs(step, totalSteps)
             controller.setCurrentPosition(position)
 
@@ -110,19 +110,21 @@ class DynamicNavigation(Navigation):
            eventInAdvanceSteps=10, eventName="steppingComplete"):
 
         # Can cross targetPosition with some speed > 0, that's not a final state.
+        pulseCount = 0
         while not (controller.getCurrentPosition() == targetPosition and accelerationStrategy.canStop()):
             if interruptPredicate():
                 return
             pulseStart = time.monotonic_ns()
-            self.pulseController(controller)
+            self.pulseController(controller, pulseCount)
+
             # Direction is set in position based acceleration' state machine.
             # Todo: computeSleepTimeUs returning position is obscure.
-            controller.setCurrentPosition(
-                accelerationStrategy.computeSleepTimeUs(controller.getCurrentPosition(),
+            position = accelerationStrategy.computeSleepTimeUs(controller.getCurrentPosition(),
                                                         targetPosition,
-                                                        lambda d: controller.setDirection(d)))
+                                                        lambda d: controller.setDirection(d))
 
-            position = controller.getCurrentPosition()
+            pulseCount += accelerationStrategy.realDirection
+            controller.setCurrentPosition(position)
             # fn should not consume many CPU instructions to avoid delays between steps.
             if fn:
                 fn(controller.getCurrentPosition(), targetPosition, accelerationStrategy.realDirection,
@@ -277,7 +279,7 @@ class BasicSynchronizedNavigation(Navigation, BlockingQueueWorker):
                 duePulsesStates.clear()
 
         except Exception as e:
-            tprint(f"SOMETHING WRONG {e}")
+            tprint(f"Synchronized Navigation Failed: {e}")
             tprint(traceback.format_exc())
             flush_current_thread_only()
 

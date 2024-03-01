@@ -131,7 +131,7 @@ class Benchmark:
             until='esc')
 
         maxPps = int(picked['pps'] - controller.accelerationStrategy.getSpeedDelta())
-        controller.accelerationStrategy.setMaxPps(maxPps)
+        controller.accelerationStrategy.setMaxPpsForBench(maxPps)
         tprint(f"Max Speed: {maxPps} <<===")
         return maxPps
 
@@ -159,7 +159,7 @@ class Benchmark:
             speedBoosts = [(minPps, self.minSpeedDelta)]
             controller.accelerationStrategy = CustomAccelerationPerPps.constructFrom(controller, speedBoosts)
             controller.accelerationStrategy.setMinPps(minPps)
-            controller.accelerationStrategy.setMaxPps(minPps + self.minSpeedDelta)
+            controller.accelerationStrategy.setMaxPpsForBench(minPps + self.minSpeedDelta)
 
         controller.accelerationStrategy.done()
 

@@ -14,6 +14,10 @@ from stepper_motors_juanmf1.myMath import sign
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 
+class NoDirectionPinDriver:
+    pass
+
+
 class ThirdPartyAdapter:
     """
     Marker interface to signal that this Controller's pins ot protected attributes can't be accessed safely.
@@ -38,8 +42,10 @@ class DriverSharedPositionStruct(ctypes.Structure):
 
 # Todo: migrate to https://pypi.org/project/python-periphery/
 class MotorDriver(BlockingQueueWorker):
+    LOCK = threading.Lock()
     INSTANCES_COUNT = 0
     PULSE_TIME_MICROS = None
+    INITIALIZED = False
 
     def __init__(self, *, stepperMotor,
                  directionGpioPin,
@@ -77,6 +83,14 @@ class MotorDriver(BlockingQueueWorker):
             self.multiprocessObserver = sharedMemory[2]
         else:
             self.multiprocessObserver = self.sharedPosition = self.sharedLock = None
+
+    def _oneTimeInit(self):
+        with self.LOCK:
+            if MotorDriver.INITIALIZED:
+                return
+
+            MotorDriver.INITIALIZED = True
+            GPIO.setmode(GPIO.BCM)
 
     @abstractmethod
     def _operateStepper(self, direction, steps):
@@ -152,7 +166,6 @@ class MotorDriver(BlockingQueueWorker):
                 f"Worker details {super().__str__()}")
 
 class BipolarStepperMotorDriver(MotorDriver):
-    LOCK = threading.Lock()
     """
     Bipolar stepper motor driver abstract implementation.
     Uses a dedicated thread to handle pulses to driver hardware in a non-blocking fashion.
@@ -162,9 +175,9 @@ class BipolarStepperMotorDriver(MotorDriver):
     Client code can send (non-blocking) instructions as :func:`~stepCounterClockWise` or
     :func:`~stepClockWise` passing a callable to update position as the motor moves.
     """
-    INITIALIZED = False
-    CW = None  # Clockwise Rotation
-    CCW = None  # Counterclockwise Rotation
+
+    CW = GPIO.HIGH  # Clockwise Rotation
+    CCW = GPIO.LOW  # Counterclockwise Rotation
     # Mode pins are static, as they are shared among Turret motors.
     RESOLUTION = None
 
@@ -236,7 +249,9 @@ class BipolarStepperMotorDriver(MotorDriver):
         [GND]       39 * * 40 [GPIO_21]
         """
         assert stepperMotor and accelerationStrategy and navigation
-        assert isinstance(self, ThirdPartyAdapter) or (directionGpioPin and stepGpioPin)
+        assert (isinstance(self, ThirdPartyAdapter)
+                or (isinstance(self, NoDirectionPinDriver) and stepGpioPin)
+                or (directionGpioPin and stepGpioPin))
         super().__init__(stepperMotor=stepperMotor,
                          directionGpioPin=directionGpioPin,
                          stepGpioPin=stepGpioPin,
@@ -297,14 +312,6 @@ class BipolarStepperMotorDriver(MotorDriver):
             GPIO.output(self.modeGpioPins, self.RESOLUTION[stepsMode])
             self.steppingModeMultiple = self.RESOLUTION_MULTIPLE[stepsMode]
 
-    def _oneTimeInit(self):
-        with self.LOCK:
-            if BipolarStepperMotorDriver.INITIALIZED:
-                return
-
-            BipolarStepperMotorDriver.INITIALIZED = True
-            GPIO.setmode(GPIO.BCM)
-
     def _doOperateStepper(self, direction, steps, fn=None, jobCompleteEventNamePrefix="", eventInAdvanceSteps=10):
         """
         Positive change in position is in clockwise direction, negative is counter clock wise.
@@ -329,8 +336,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         self.isRunning = True
 
         if not self.useHoldingTorque:
-            self.sleepGpioPin is not None and self.setSleepMode(sleepOn=False)
-            self.enableGpioPin is not None and self.setEnableMode(enableOn=True)
+            self.powerOnCoils()
 
         eventName = jobCompleteEventNamePrefix + self._steppingCompleteEventName
         # Multiprocess event propagation is in the order of 0.003 seconds or ~1 step at 300 PPS.
@@ -342,8 +348,7 @@ class BipolarStepperMotorDriver(MotorDriver):
             return
 
         if not self.useHoldingTorque:
-            self.sleepGpioPin is not None and self.setSleepMode(sleepOn=True)
-            self.enableGpioPin is not None and self.setEnableMode(enableOn=False)
+            self.shutDownCoils()
 
         self.isRunning = False
         startTime = self.currentJob.startTime.result()
@@ -367,6 +372,18 @@ class BipolarStepperMotorDriver(MotorDriver):
             self.accelerationStrategy.setMaxPPS(oldPps)
         else:
             self._doOperateStepper(direction, steps, fn, jobCompleteEventNamePrefix, eventInAdvanceSteps)
+
+    def shutDownCoils(self):
+        if self.sleepGpioPin:
+            self.setSleepMode(sleepOn=True)
+        elif self.enableGpioPin:
+            self.setEnableMode(enableOn=False)
+
+    def powerOnCoils(self):
+        if self.sleepGpioPin:
+            self.setSleepMode(sleepOn=False)
+        elif self.enableGpioPin:
+            self.setEnableMode(enableOn=True)
 
     def getActualCurrentPosition(self):
         self.actualCurrentPosition = self.steppingModeMultiple * self.getCurrentPosition()

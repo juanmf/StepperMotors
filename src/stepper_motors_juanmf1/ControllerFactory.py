@@ -25,7 +25,7 @@ from stepper_motors_juanmf1.BlockingQueueWorker import MpQueue
 from stepper_motors_juanmf1.EventDispatcher import EventDispatcher, MultiprocessObserver
 from stepper_motors_juanmf1.StepperMotor import StepperMotor
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_streams_if_not_empty
-from stepper_motors_juanmf1.UnipolarController import UnipolarMotorDriver
+from stepper_motors_juanmf1.UnipolarController import UnipolarMotorDriver, ULN2003MotorDriver
 
 
 class ControllerBuilder:
@@ -304,6 +304,16 @@ class ControllerBuilder:
     def buildUnipolarDriver(self) -> UnipolarMotorDriver:
         assert not self.built
         driver = UnipolarMotorDriver(**self._driverConstructorKwArgs(UnipolarMotorDriver))
+        self.built = True
+        return driver
+
+    def buildUNL2003Driver(self) -> UnipolarMotorDriver:
+        """
+        Same behavior as buildUnipolarDriver()
+        @return: ULN2003MotorDriver
+        """
+        assert not self.built
+        driver = ULN2003MotorDriver(**self._driverConstructorKwArgs(UnipolarMotorDriver))
         self.built = True
         return driver
 

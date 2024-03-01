@@ -17,8 +17,15 @@ _interpreter = None
 _globalPrintLock = threading.Lock()
 
 
-def tprint(*args, sep=' ', end='\n'):
+def tprint(*args, sep=' ', end='\n', flush=False):
+    """
+    @param args: What to print.
+    @param sep: what separates arguments.
+    @param end: end of line.
+    @param flush: If True, immediately flushes this thread alone, use `flush_streams()` for all.
+    """
     # Micros
+    global _printStreams
     timestamp = time.time_ns() // 1000
     message = sep.join(map(str, args)) + end
     thread_name, thread_id = get_current_thread_info()
@@ -27,6 +34,8 @@ def tprint(*args, sep=' ', end='\n'):
             _printStreams[thread_name] = {}
 
         _printStreams[thread_name][timestamp] = message
+    if flush:
+        flush_streams({thread_name: _printStreams.pop(thread_name)})
 
 
 def flush_current_thread_only():

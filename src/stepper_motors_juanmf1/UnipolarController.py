@@ -1,11 +1,22 @@
-from stepper_motors_juanmf1.AccelerationStrategy import AccelerationStrategy
-from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver
 from RPi import GPIO
 
+from stepper_motors_juanmf1.AccelerationStrategy import AccelerationStrategy
+from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver, ThirdPartyAdapter
 from stepper_motors_juanmf1.StepperMotor import StepperMotor
+from stepper_motors_juanmf1.Controller import NoDirectionPinDriver
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 
-class UnipolarMotorDriver(BipolarStepperMotorDriver):
+class UnipolarMotorDriver(BipolarStepperMotorDriver, NoDirectionPinDriver):
+    PULSE_TIME_MICROS = 2
+    """
+    Unipolar don't use pulse time as bipolar, 2 represents a small enough pulse to prevent wait.
+    """
+
+    DISABLE_STATE = (GPIO.LOW, GPIO.LOW, GPIO.LOW, GPIO.LOW)
+    """
+    When useHoldingTorque if False shitting down coils after stepping.
+    """
 
     def __init__(self, *,
                  stepperMotor: StepperMotor,
@@ -50,6 +61,24 @@ class UnipolarMotorDriver(BipolarStepperMotorDriver):
 
         self.sequence = UnipolarMotorDriver.Sequence(UnipolarMotorDriver.Sequence.FULL)
 
+    def shutDownCoils(self):
+        self.setEnableMode(False)
+
+    def powerOnCoils(self):
+        self.setEnableMode(True)
+
+    def _initGpio(self, stepsMode):
+        self._oneTimeInit()
+
+        GPIO.setup(self.stepGpioPin, GPIO.OUT)
+        GPIO.output(self.stepGpioPin, GPIO.LOW)
+
+    def setDirection(self, directionState):
+        # Todo: update sharedMemory
+        # Translating potential negative values to GPIO.LOW
+        directionState = GPIO.HIGH if directionState == GPIO.HIGH else GPIO.LOW
+        self.currentDirection = directionState
+
     def setSleepMode(self, sleepOn=False):
         """
         Active LOW, so if sleepOn True, pin is LOW. if sleepOn False, pin is HIGH.
@@ -63,14 +92,10 @@ class UnipolarMotorDriver(BipolarStepperMotorDriver):
 
     def setEnableMode(self, enableOn=True):
         """
-        Active LOW, so if enableOn True, pin is LOW. if enableOn False, pin is HIGH.
-        @param enableOn: enable or disable the driver chip.  This pin is particularly useful when implementing an
-        emergency stop or shutdown system. Although some integrated circuits like RPI Hats will use this for sleep.
+        Achieve Enable/Disable by shutting down coils
         """
-        if self.enableGpioPin is None:
-            return
-        state = GPIO.LOW if enableOn else GPIO.HIGH
-        GPIO.output(self.enableGpioPin, state)
+        state = self.sequence.getCurrent() if enableOn else self.DISABLE_STATE
+        GPIO.output(self.stepGpioPin, state)
 
     def pulseStart(self, stepRelativeToJobStart=None):
         GPIO.output(
@@ -127,9 +152,15 @@ class UnipolarMotorDriver(BipolarStepperMotorDriver):
         def __init__(self, sequenceType):
             assert sequenceType in self.SUPPORTED_TYPES
             self.type = sequenceType
+            self.current = self.STEP_SEQUENCE[self.type][0]
+            self.steppingMod = len(self.STEP_SEQUENCE[self.type])
 
         def getStepSequence(self, stepRelativeToJobStart):
-            return self.STEP_SEQUENCE[self.type][stepRelativeToJobStart % len(self.STEP_SEQUENCE[self.type])]
+            self.current = self.STEP_SEQUENCE[self.type][stepRelativeToJobStart % self.steppingMod]
+            return self.current
+
+        def getCurrent(self):
+            return self.current
 
 
 class ULN2003MotorDriver(UnipolarMotorDriver):

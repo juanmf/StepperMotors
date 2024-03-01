@@ -84,6 +84,11 @@ class AdafruitStepperDriverAdapter(BipolarStepperMotorDriver, ThirdPartyAdapter)
                          jobCompletionObserver=jobCompletionObserver)
         print(f"self.adafruitStyle {self.adafruitStyle}; self.stepsMode {self.stepsMode} =>  {self.steppingModeMultiple}")
 
+    def shutDownCoils(self):
+        self.setEnableMode(False)
+
+    def powerOnCoils(self):
+        pass
 
     def _initGpio(self, stepsMode):
         pass

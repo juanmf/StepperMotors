@@ -302,7 +302,13 @@ class CustomAccelerationPerPps(AccelerationStrategy):
             self.currentPps = self.minPps
             self.currentSleepTimeUs = 1_000_000 / self.minPps
 
-    def setMaxPps(self, pps):
+    def setMaxPPS(self, maxPps):
+        raise RuntimeError("Cant set max PPS for Custom Acceleration, it's determined by torque curve.")
+
+    def setMaxPpsForBench(self, pps):
+        """
+        To be used by benchmark module only
+        """
         pps = int(pps / self.steppingModeMultiple)
         self.maxPps = pps
         self.minSleepTimeUs = 1_000_000 / pps
@@ -341,13 +347,13 @@ class CustomAccelerationPerPps(AccelerationStrategy):
         self.transformationsPPS = [item[0] for item in self.transformations]
         self.lastSpeedDelta = 0
 
-        self.setMaxPps(self.transformationsPPS[-1])
+        self.setMaxPpsForBench(self.transformationsPPS[-1])
 
     def inferMaxPps(self):
         """
         Resets max Speed using last speed Boost + its increment. Which should be zero unless benchmarking.
         """
-        self.setMaxPps(self.transformations[-1][0] + self.transformations[-1][1])
+        self.setMaxPpsForBench(self.transformations[-1][0] + self.transformations[-1][1])
 
     @classmethod
     def constructFrom(cls, controller, speedBoosts):
