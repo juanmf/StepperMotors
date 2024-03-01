@@ -59,6 +59,11 @@ Driers that should work with implemented classes in _Italic_
 | [L298N](https://forum.arduino.cc/t/stepper-motor-basics/275223) <td colspan=3> Not sure I'll implement a H-Bridge type |  
 | ULN2003 <td colspan=3> Unipolar driers Not supported                                                                   |
 
+Also implements an adapter to [Adafruit stepper motor driver](https://learn.adafruit.com/adafruit-dc-and-stepper-motor-hat-for-raspberry-pi/using-stepper-motors).
+* Tested on (latest as of this writing) adafruit-circuitpython-motorkit (1.6.14)*
+See demo files:
+* [AdafruitStepperAllCombinationsDemo](doc/demo/AdafruitStepperAllCombinationsDemo.py)
+* [AdafruitStepperMotorDemo](doc/demo/AdafruitStepperMotorDemo.py)
 
 ## Demo
 
