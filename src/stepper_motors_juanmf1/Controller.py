@@ -10,7 +10,7 @@ from stepper_motors_juanmf1.AccelerationStrategy import AccelerationStrategy
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker
 from stepper_motors_juanmf1.EventDispatcher import EventDispatcher
 from stepper_motors_juanmf1.StepperMotor import StepperMotor
-from stepper_motors_juanmf1.myMath import sign
+from stepper_motors_juanmf1.myMath import sign, cmp
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
 
 
@@ -178,6 +178,8 @@ class BipolarStepperMotorDriver(MotorDriver):
 
     CW = GPIO.HIGH  # Clockwise Rotation
     CCW = GPIO.LOW  # Counterclockwise Rotation
+    CLOSEST = -1    # In absolute positioning `moveTo()` determine cheapest from CW vs CCW.
+
     # Mode pins are static, as they are shared among Turret motors.
     RESOLUTION = None
 
@@ -283,7 +285,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         # unless overriden by useHoldingTorque
         # Never sleeps/disable
         self.useHoldingTorque = useHoldingTorque if useHoldingTorque is not None \
-                                else not (sleepGpioPin is None and enableGpioPin is None)
+            else not (sleepGpioPin is None and enableGpioPin is None)
 
         self._initGpio(stepsMode)
 
@@ -331,8 +333,16 @@ class BipolarStepperMotorDriver(MotorDriver):
         """
         if steps < 0:
             raise RuntimeError("Can't handle negative steps. Use direction (self.CW or self.CCW) & steps > 0 properly.")
-        signedDirection = 1 if direction == self.CW else -1
-        targetPosition = int(self.getCurrentPosition() + (signedDirection * steps))
+
+        position = self.getCurrentPosition()
+        if direction == self.CLOSEST:
+            # steps is absolute position.
+            shaftPosition = position % self.stepperMotor.getSpr()
+            targetPosition = position + (steps - shaftPosition)
+        else:
+            signedDirection = 1 if direction == self.CW else -1
+            targetPosition = int(position + (signedDirection * steps))
+
         self.isRunning = True
 
         if not self.useHoldingTorque:
@@ -456,6 +466,16 @@ class BipolarStepperMotorDriver(MotorDriver):
                                          jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
                                          maxPpsOverride=maxPpsOverride,
                                          eventInAdvanceSteps=eventInAdvanceSteps)
+
+    def moveTo(self, step, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None, eventInAdvanceSteps=10):
+        """
+        move the shaft to an absolute position. 0 <= step <= SPR
+        @param step:
+        @return:
+        """
+        return self.work(
+            paramsList=[self.CLOSEST, step, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps],
+            block=True)
 
     def signedSteps(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
                     eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:

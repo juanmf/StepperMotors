@@ -8,7 +8,7 @@ def run(accCallable, navCallable, stepMode, stepper):
     builder: ControllerBuilder = (ControllerBuilder()
                                   # Pins entered in sequence IN1-IN3-IN2-IN4 for proper step sequence
                                   .getBasicBuilder(stepper, directionGpioPin=None, stepGpioPin=(6, 19, 13, 26))
-                                  .withHoldingTorqueEnabled(False))
+                                  .withHoldingTorqueEnabled(True))
     navCallable[0](builder)
     accCallable[0](builder)
     builder.withsteppingMode(stepMode)
@@ -46,6 +46,8 @@ for k, d in drivers.items():
     print(f"Starting round: {k}")
     d.signedSteps(dir * d.stepperMotor.getSpr()).result()
     last1 = d
+    if dir == -1:
+        break
     dir *= -1
 
 last1.setEnableMode(enableOn=False)
