@@ -2,6 +2,8 @@ import itertools
 from stepper_motors_juanmf1.ControllerFactory import ControllerBuilder
 from stepper_motors_juanmf1.StepperMotor import Stepper_28BYJ_48
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_streams
+from stepper_motors_juanmf1.UnipolarController import UnipolarMotorDriver
+
 
 def run(accCallable, navCallable, stepMode, stepper):
     print(accCallable[1], navCallable[1], stepMode, stepper)
@@ -33,13 +35,16 @@ def main():
             (lambda b: b.withNavigationStyleDynamic(), 'withNavigationStyleDynamic'),
             (lambda b: b.withNavigationStyleSynchronized(), 'withNavigationStyleSynchronized')]
     steppingModes = ['Full', 'Half']
+    sequenceTypes = UnipolarMotorDriver.Sequence.PINS_USED_2_TYPES_MAP[4]
     drivers={}
-    for tup in itertools.product(accs, navs, steppingModes):
+    for tup in itertools.product(accs, navs, steppingModes + sequenceTypes):
         drivers[key(*tup)] = run(*tup, stepper)
     return drivers
 
 
 drivers = main()
+dd = drivers.values()
+
 dir = 1
 last1 = None
 for k, d in drivers.items():

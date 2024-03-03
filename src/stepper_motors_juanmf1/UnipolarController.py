@@ -153,7 +153,6 @@ class UnipolarMotorDriver(BipolarStepperMotorDriver, NoDirectionPinDriver):
                 FULL_3PIN: "Full",
                 HALF_3PIN: "Half"}
 
-
         STEP_SEQUENCE = {
             FULL_2PIN: [(GPIO.LOW, GPIO.HIGH),   # 01
                         (GPIO.HIGH, GPIO.HIGH),  # 11

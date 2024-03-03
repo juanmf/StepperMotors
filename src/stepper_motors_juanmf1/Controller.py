@@ -165,6 +165,7 @@ class MotorDriver(BlockingQueueWorker):
                 f"sharedLock: {self.sharedLock}\n"
                 f"Worker details {super().__str__()}")
 
+
 class BipolarStepperMotorDriver(MotorDriver):
     """
     Bipolar stepper motor driver abstract implementation.
@@ -337,10 +338,7 @@ class BipolarStepperMotorDriver(MotorDriver):
         position = self.getCurrentPosition()
         if direction == self.CLOSEST:
             # steps is absolute position.
-            # test for steps:
-            shaftPosition = position % self.stepperMotor.getSpr()
-            steps %= self.stepperMotor.getSpr()
-            targetPosition = position + (steps - shaftPosition)
+            targetPosition = self.findShortestPathTargetPosition(position, steps, self.stepperMotor.getSpr())
         else:
             signedDirection = 1 if direction == self.CW else -1
             targetPosition = int(position + (signedDirection * steps))
@@ -369,6 +367,19 @@ class BipolarStepperMotorDriver(MotorDriver):
                                                     'startTime': startTime,
                                                     'endTime': time.monotonic_ns()
                                                     })
+
+    @staticmethod
+    def findShortestPathTargetPosition(position, stepNumber, spr):
+        """
+        @param position: Driver's current position any int.
+        @param stepNumber: A step number within one revolution.
+        @param spr: Steps per revolution.
+        @return:
+        """
+        halfWay = spr // 2
+        distance = (stepNumber - position) % spr
+        shortest = halfWay - abs(abs(distance) - halfWay)
+        return position + (shortest if (spr + distance) % spr < halfWay else -shortest)
 
     def _operateStepper(self, direction, steps, fn=None, jobCompleteEventNamePrefix="", maxStepsPerSecondOverride=None,
                         eventInAdvanceSteps=10):
