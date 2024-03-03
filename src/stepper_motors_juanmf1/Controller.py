@@ -438,47 +438,47 @@ class BipolarStepperMotorDriver(MotorDriver):
     def isInterrupted(self):
         return self.hasQueuedJobs()
 
-    def signedMicroSteps(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
-                         eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+    def signedSteps(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
+                    eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
         """
-        Accounts for current micro-stepping mode. Steps is the the actual, real, motor steps to run for.
-        this is equivalent to signedSteps() only in Full step mode.
+        Accounts for current micro-stepping mode. Steps is the actual, real, motor steps to run for.
+        this is equivalent to signedMicroSteps() only in Full step mode.
         @param steps: REAL motor steps number
         @return: a BlockingQueueWorker.Job representing this stepping job.
         """
-        return self.signedSteps(int(steps / self.steppingModeMultiple),
-                                fn=fn,
-                                jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
-                                maxPpsOverride=maxPpsOverride,
-                                eventInAdvanceSteps=eventInAdvanceSteps)
+        return self.signedMicroSteps(int(steps / self.steppingModeMultiple),
+                                     fn=fn,
+                                     jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                                     maxPpsOverride=maxPpsOverride,
+                                     eventInAdvanceSteps=eventInAdvanceSteps)
 
-    def microStepClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
-                           eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+    def stepClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
+                      eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
         """
         Accounts for current micro-stepping mode. Steps is the the actual, real, motor steps to run for.
-        this is equivalent to stepClockWise() only in Full step mode.
+        this is equivalent to microStepClockWise() only in Full step mode.
         @param steps: REAL motor steps number
         @return: a BlockingQueueWorker.Job representing this stepping job.
         """
-        return self.stepClockWise(int(steps / self.steppingModeMultiple),
-                                  fn=fn,
-                                  jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
-                                  maxPpsOverride=maxPpsOverride,
-                                  eventInAdvanceSteps=eventInAdvanceSteps)
+        return self.microStepClockWise(int(steps / self.steppingModeMultiple),
+                                       fn=fn,
+                                       jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                                       maxPpsOverride=maxPpsOverride,
+                                       eventInAdvanceSteps=eventInAdvanceSteps)
 
-    def microStepCounterClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix=None, maxPpsOverride=None,
+    def stepCounterClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
                                   eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
         """
         Accounts for current micro-stepping mode. Steps is the the actual, real, motor steps to run for.
-        this is equivalent to stepCounterClockWise() only in Full step mode.
+        this is equivalent to microStepCounterClockWise() only in Full step mode.
         @param steps: REAL motor steps number
         @return: a BlockingQueueWorker.Job representing this stepping job.
         """
-        return self.stepCounterClockWise(int(steps / self.steppingModeMultiple),
-                                         fn=fn,
-                                         jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
-                                         maxPpsOverride=maxPpsOverride,
-                                         eventInAdvanceSteps=eventInAdvanceSteps)
+        return self.microStepCounterClockWise(int(steps / self.steppingModeMultiple),
+                                              fn=fn,
+                                              jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                                              maxPpsOverride=maxPpsOverride,
+                                              eventInAdvanceSteps=eventInAdvanceSteps)
 
     def moveTo(self, step, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None, eventInAdvanceSteps=10):
         """
@@ -487,13 +487,15 @@ class BipolarStepperMotorDriver(MotorDriver):
         @return:
         """
         return self.work(
-            paramsList=[self.CLOSEST, step, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps],
+            paramsList=[self.CLOSEST, int(step / self.steppingModeMultiple), fn, jobCompleteEventNamePrefix,
+                        maxPpsOverride, eventInAdvanceSteps],
             block=True)
 
-    def signedSteps(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
-                    eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+    def signedMicroSteps(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
+                         eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
         """
         Creates stepping jobs handled by self._operateStepper.
+        Steps is affected by microstepping mode. Effectively one step = one real microstep
         Here Steps = Pulses, matchong actual motor steps ONLY IN FULL STEP MODE. see signedMicroSteps()
         @param steps: signed steps, -100 is 100 steps counterclockwise, 100 is 100 steps clockwise.
         @param fn: Stepping callback. Will be called on each step with contract:
@@ -508,20 +510,20 @@ class BipolarStepperMotorDriver(MotorDriver):
         """
         StepsSign = sign(steps)
         if StepsSign > 0:
-            return self.stepClockWise(abs(steps),
-                                      fn=fn,
-                                      jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
-                                      maxPpsOverride=maxPpsOverride,
-                                      eventInAdvanceSteps=eventInAdvanceSteps)
+            return self.microStepClockWise(abs(steps),
+                                           fn=fn,
+                                           jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                                           maxPpsOverride=maxPpsOverride,
+                                           eventInAdvanceSteps=eventInAdvanceSteps)
         elif StepsSign < 0:
-            return self.stepCounterClockWise(abs(steps),
-                                             fn=fn,
-                                             jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
-                                             maxPpsOverride=maxPpsOverride,
-                                             eventInAdvanceSteps=eventInAdvanceSteps)
+            return self.microStepCounterClockWise(abs(steps),
+                                                  fn=fn,
+                                                  jobCompleteEventNamePrefix=jobCompleteEventNamePrefix,
+                                                  maxPpsOverride=maxPpsOverride,
+                                                  eventInAdvanceSteps=eventInAdvanceSteps)
 
-    def stepClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
-                      eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+    def microStepClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
+                           eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
         """
         See signedSteps()
         1 step = 1 pulse, does not correct for microStepping. See microStepClockWise()
@@ -531,8 +533,8 @@ class BipolarStepperMotorDriver(MotorDriver):
             paramsList=[self.CW, steps, fn, jobCompleteEventNamePrefix, maxPpsOverride, eventInAdvanceSteps],
             block=True)
 
-    def stepCounterClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
-                             eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
+    def microStepCounterClockWise(self, steps, *, fn=None, jobCompleteEventNamePrefix="", maxPpsOverride=None,
+                                  eventInAdvanceSteps=10) -> BlockingQueueWorker.Job:
         """
         See signedSteps()
         1 step = 1 pulse, does not correct for microStepping. See microStepCounterClockWise()

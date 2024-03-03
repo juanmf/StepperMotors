@@ -35,6 +35,7 @@ def main():
             (lambda b: b.withNavigationStyleDynamic(), 'withNavigationStyleDynamic'),
             (lambda b: b.withNavigationStyleSynchronized(), 'withNavigationStyleSynchronized')]
     steppingModes = ['Full', 'Half']
+    # Types for 4 pins
     sequenceTypes = UnipolarMotorDriver.Sequence.PINS_USED_2_TYPES_MAP[4]
     drivers={}
     for tup in itertools.product(accs, navs, steppingModes + sequenceTypes):
@@ -43,7 +44,6 @@ def main():
 
 
 drivers = main()
-dd = drivers.values()
 
 dir = 1
 last1 = None
@@ -51,8 +51,11 @@ for k, d in drivers.items():
     print(f"Starting round: {k}")
     d.signedSteps(dir * d.stepperMotor.getSpr()).result()
     last1 = d
-    if dir == -1:
-        break
     dir *= -1
 
 last1.setEnableMode(enableOn=False)
+
+
+for k, d in drivers.items():
+    print(f"Starting round: {k}")
+    print(d.steppingModeMultiple)
