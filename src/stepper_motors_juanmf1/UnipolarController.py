@@ -38,11 +38,26 @@ class UnipolarMotorDriver(BipolarStepperMotorDriver, NoDirectionPinDriver):
                  jobCompletionObserver=None,
                  workerName=None):
 
+        pinsCount = len(stepGpioPin)
         if stepsMode is None:
+            # Todo: 5 pin sequences?
+            assert pinsCount in [2, 3, 4]
             # Builders might set this to None.
-            stepsMode = self.DEFAULT_STEPPING_MODE,
+            stepsMode = self.DEFAULT_STEPPING_MODE
         else:
-            assert stepsMode in UnipolarMotorDriver.Sequence.SUPPORTED_MICROSTEPS
+            assert ((stepsMode in UnipolarMotorDriver.Sequence.SUPPORTED_MICROSTEPS) or
+                    (stepsMode in UnipolarMotorDriver.Sequence.SUPPORTED_TYPES
+                     and stepsMode in UnipolarMotorDriver.Sequence.PINS_USED_2_TYPES_MAP[pinsCount]))
+
+        if stepsMode in UnipolarMotorDriver.Sequence.SUPPORTED_TYPES:
+            sequence = stepsMode
+            stepsMode = UnipolarMotorDriver.Sequence.SEQUENCE_2_MICROSTEPPING_MODE_MAP[stepsMode]
+        else:
+            sequenceKey = f"{stepsMode}-{pinsCount}"
+            sequence = UnipolarMotorDriver.Sequence.MICROSTEPPING_MODE_2_SEQUENCE_MAP[sequenceKey]
+
+        self.sequence = UnipolarMotorDriver.Sequence(sequence)
+
         super().__init__(stepperMotor=stepperMotor,
                          accelerationStrategy=accelerationStrategy,
                          navigation=navigation,
@@ -58,8 +73,6 @@ class UnipolarMotorDriver(BipolarStepperMotorDriver, NoDirectionPinDriver):
                          sharedMemory=sharedMemory,
                          isProxy=isProxy,
                          jobCompletionObserver=jobCompletionObserver)
-
-        self.sequence = UnipolarMotorDriver.Sequence(UnipolarMotorDriver.Sequence.FULL)
 
     def shutDownCoils(self):
         self.setEnableMode(False)
@@ -108,27 +121,55 @@ class UnipolarMotorDriver(BipolarStepperMotorDriver, NoDirectionPinDriver):
 
     class Sequence:
 
-        SUPPORTED_MICROSTEPS = ["Full", "Half", "1/2"]
-
         FULL = "4p-Full"
+        FULL_LOW_POWER = "4p-Full-low"
         HALF = "4p-Half"
         FULL_2PIN = "2p-Full"
         FULL_3PIN = "3p-Full"
         HALF_3PIN = "3p-Half"
 
-        SUPPORTED_TYPES = [FULL, FULL_2PIN, HALF, FULL_3PIN, HALF_3PIN]
+        SUPPORTED_TYPES = [FULL, FULL_LOW_POWER, FULL_2PIN, HALF, FULL_3PIN, HALF_3PIN]
+        SUPPORTED_MICROSTEPS = ["Full", "Half", "1/2"]
+
+        PINS_USED_2_TYPES_MAP = {
+                4: [FULL, FULL_LOW_POWER, HALF],
+                3: [FULL_3PIN, HALF_3PIN],
+                2: [FULL_2PIN]}
+
+        MICROSTEPPING_MODE_2_SEQUENCE_MAP = {
+                "Full-4": FULL,
+                "Full-3": FULL_3PIN,
+                "Full-2": FULL_2PIN,
+                "Half-4": HALF,
+                "Half-3": HALF_3PIN,
+                "1/2-4": HALF,
+                "1/2-3": HALF_3PIN}
+
+        SEQUENCE_2_MICROSTEPPING_MODE_MAP = {
+                FULL: "Full",
+                FULL_LOW_POWER: "Full",
+                HALF: "Half",
+                FULL_2PIN: "Full",
+                FULL_3PIN: "Full",
+                HALF_3PIN: "Half"}
+
 
         STEP_SEQUENCE = {
             FULL_2PIN: [(GPIO.LOW, GPIO.HIGH),   # 01
                         (GPIO.HIGH, GPIO.HIGH),  # 11
                         (GPIO.HIGH, GPIO.LOW)],  # 10
 
-            FULL:  [(GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.LOW),  # 1010
-                    (GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.LOW),  # 0110
-                    (GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH),  # 0101
-                    (GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.HIGH)], # 1001
+            FULL:  [(GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.LOW),   # 1010
+                    (GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.LOW),   # 0110
+                    (GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH),   # 0101
+                    (GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.HIGH)],  # 1001
 
-            HALF: [(GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.LOW),     # 1000
+            FULL_LOW_POWER:  [(GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.LOW),   # 1000
+                              (GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.LOW),   # 0010
+                              (GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.LOW),   # 0100
+                              (GPIO.LOW, GPIO.LOW, GPIO.LOW, GPIO.HIGH)],  # 0001
+
+            HALF: [(GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.LOW),    # 1000
                    (GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.LOW),   # 1010
                    (GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.LOW),    # 0010
                    (GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.LOW),   # 0110
@@ -156,6 +197,8 @@ class UnipolarMotorDriver(BipolarStepperMotorDriver, NoDirectionPinDriver):
             self.steppingMod = len(self.STEP_SEQUENCE[self.type])
 
         def getStepSequence(self, stepRelativeToJobStart):
+            # Todo: Not sure if starting from zero on every stepping job is the right call.
+            #   What happens when a job ends at a different phase and then the next starts at phase 0?
             self.current = self.STEP_SEQUENCE[self.type][stepRelativeToJobStart % self.steppingMod]
             return self.current
 

@@ -337,7 +337,9 @@ class BipolarStepperMotorDriver(MotorDriver):
         position = self.getCurrentPosition()
         if direction == self.CLOSEST:
             # steps is absolute position.
+            # test for steps:
             shaftPosition = position % self.stepperMotor.getSpr()
+            steps %= self.stepperMotor.getSpr()
             targetPosition = position + (steps - shaftPosition)
         else:
             signedDirection = 1 if direction == self.CW else -1
