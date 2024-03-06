@@ -594,11 +594,11 @@ class SynchronizedControllerFactory(ControllerFactory):
 
 
 class MultiProcessingControllerFactory(SynchronizedControllerFactory):
+    runningProcesses = []
 
     def __init__(self):
         self.eventDispatcher = EventDispatcher.instance()
         self._factoryOrders = []
-        self.runningProcesses = []
         self._clientMultiprocessObservers = []
 
     def setUpProcess(self) -> 'MultiProcessingControllerFactory':
@@ -637,6 +637,7 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
         @return: A list of proxy drivers you can use on MainProcess to send stepping jobs to counterpart drivers in
         child process.        
         """
+        print("SPAWNING!!")
         syncNavigationCountDownLatch = (BasicSynchronizedNavigation.getInstance(
                     newMultitonKey=syncNavigationMultitonKey)
                 .getCountDownLatch(default=Value('i', 0)))

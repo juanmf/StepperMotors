@@ -18,6 +18,14 @@ from stepper_motors_juanmf1.ThreadOrderedPrint import flush_current_thread_only
 
 
 class Navigation:
+    """
+    Navigation strategies is where PPS is actually senf to the motor drivers, by making use of their configured
+    Acceleration strategies, it determines "sleep/wait" time.
+    Several components can be a bottleneck while pulsing a driver:
+    * Your RPi. Mine (RPi 4B) is currently handling 14.2K cycles/s (at 60 RPM & 200 SPR yields max 71 microsteps before
+            slowing down the motor). This is due to time consumed computing next sleep times during pulse duration.
+    * The motor max steps per second
+    """
     _COMPLETED_FUTURE = None  # Class variable
 
     def __init__(self):

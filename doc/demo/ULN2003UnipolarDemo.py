@@ -10,7 +10,7 @@ def run(accCallable, navCallable, stepMode, stepper):
     builder: ControllerBuilder = (ControllerBuilder()
                                   # Pins entered in sequence IN1-IN3-IN2-IN4 for proper step sequence
                                   .getBasicBuilder(stepper, directionGpioPin=None, stepGpioPin=(6, 19, 13, 26))
-                                  .withHoldingTorqueEnabled(True))
+                                  .withHoldingTorqueEnabled(False))
     navCallable[0](builder)
     accCallable[0](builder)
     builder.withsteppingMode(stepMode)
