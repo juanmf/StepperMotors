@@ -46,18 +46,19 @@ headers marker with * are concepts the MotorDriver base class knows about,
 Explicitly implemented Driver names are marked with ***Bolded**.
 Driers that should work with implemented classes in _Italic_ 
 
-| Driver                                                                                                                 | Step* (Pulse 20-50μs)                                       | Direction* | Enable*     | Sleep*      | Microstepping* (Number of Pins) | Fault        | Implemented  |
-|------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------|------------|-------------|-------------|---------------------------------|--------------|--------------|
-| **DRV8825**                                                                                                            | 1-2μs (min)                                                 | HIGH/LOW   | ACTIVE LOW  | ACTIVE LOW  | 3 (2^3 = 8 modes)               | YES          | Yes          |
-| **TMC2209**                                                                                                            | 1-2μs (min)                                                 | HIGH/LOW   | ACTIVE LOW  | NA          | 4 (2^4 = 16 modes)              | YES          | Yes          |
-| _A4988_                                                                                                                | 1-2μs (min)                                                 | HIGH/LOW   | ACTIVE LOW  | ACTIVE LOW  | 3 (2^3 = 8 modes)               | NO           | Eq(DRV8825)  |
-| TB6600                                                                                                                 | 1-2μs (min)                                                 | HIGH/LOW   | ACTIVE LOW  | ACTIVE LOW  | 3 (2^3 = 8 modes)               | YES          |              |
-| TB6560                                                                                                                 | 1-2μs (min)                                                 | HIGH/LOW   | ACTIVE LOW  | ACTIVE LOW  | 3 (2^3 = 8 modes)               | YES          |              |
-| _TMC2208_                                                                                                              | 1-2μs (min)                                                 | HIGH/LOW   | ACTIVE LOW  | NA          | 4 (2^4 = 16 modes)              | YES          | Eq(TMC2208)  |
-| _TMC2226_                                                                                                              | 1-2μs (min)                                                 | HIGH/LOW   | ACTIVE LOW  | NA          | 4 (2^4 = 16 modes)              | YES          | Eq(TMC2208)  |
-| _LV8729_                                                                                                               | 1-2μs (min)                                                 | HIGH/LOW   | ACTIVE LOW  | ACTIVE LOW  | 3 (2^3 = 8 modes)               | NO           | Eq(DRV8825)  |
-| [L298N](https://forum.arduino.cc/t/stepper-motor-basics/275223) <td colspan=3> Not sure I'll implement a H-Bridge type |  
-| ULN2003 <td colspan=3> Unipolar driers Not supported                                                                   |
+| Driver                                                                        | Step* (Pulse 20-50μs) | Direction* | Enable*    | Sleep*     | Microstepping* (Number of Pins) | Fault | Implemented |
+|-------------------------------------------------------------------------------|-----------------------|------------|------------|------------|---------------------------------|-------|-------------|
+| **DRV8825**                                                                   | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW | ACTIVE LOW | 3 (2^3 = 8 modes)               | YES   | Yes         |
+| **TMC2209**                                                                   | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW | NA         | 4 (2^4 = 16 modes)              | YES   | Yes         |
+| _A4988_                                                                       | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW | ACTIVE LOW | 3 (2^3 = 8 modes)               | NO    | Eq(DRV8825) |
+| TB6600                                                                        | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW | ACTIVE LOW | 3 (2^3 = 8 modes)               | YES   |             |
+| TB6560                                                                        | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW | ACTIVE LOW | 3 (2^3 = 8 modes)               | YES   |             |
+| _TMC2208_                                                                     | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW | NA         | 4 (2^4 = 16 modes)              | YES   | Eq(TMC2208) |
+| _TMC2226_                                                                     | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW | NA         | 4 (2^4 = 16 modes)              | YES   | Eq(TMC2208) |
+| [Adafruit Motor HAT Adapter](https://www.adafruit.com/product/2348)           | -                     | -          | -          | -          | 4 (2^4 = 16 modes)              | -     | Yes         |
+| _LV8729_                                                                      | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW | ACTIVE LOW | 3 (2^3 = 8 modes)               | NO    | Eq(DRV8825) |
+| [L298N](https://forum.arduino.cc/t/stepper-motor-basics/275223) Not supported | 1-2μs (min)           | HIGH/LOW   | ACTIVE LOW | ACTIVE LOW | 3 (2^3 = 8 modes)               | NO    |             |
+| **ULN2003** (Unipolar)                                                        | Full cycle on/off     | Sequence   | -          | -          | - Full & Half step              | NO    | Yes         |
 
 Also implements an adapter to [Adafruit stepper motor driver](https://learn.adafruit.com/adafruit-dc-and-stepper-motor-hat-for-raspberry-pi/using-stepper-motors).
 * Tested on (latest as of this writing) adafruit-circuitpython-motorkit (1.6.14)*

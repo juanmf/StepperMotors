@@ -6,6 +6,7 @@ import multiprocessing
 
 from RPi import GPIO
 from multiprocessing import current_process
+from sshkeyboard import stop_listening
 
 from stepper_motors_juanmf1 import BlockingQueueWorker
 from stepper_motors_juanmf1.ControllerFactory import MultiProcessingControllerFactory
@@ -19,7 +20,7 @@ def terminateProcess(process):
     os.kill(process.pid, signal.SIGKILL)
 
 # Define a function to handle the interrupt signal (Ctrl+C)
-def interrupt_handler(signum, frame):
+def interrupt_handler(signum=13, frame=None):
     tprint(f"Received signal {signum}. Cleaning up before exit.")
     try:
         for process, proxyController in MultiProcessingControllerFactory.runningProcesses:
@@ -39,10 +40,12 @@ def interrupt_handler(signum, frame):
 
         GPIO.cleanup()
         flush_streams()
+        stop_listening()
         time.sleep(2)
     finally:
         # os.kill(os.getpid(), signal.SIGKILL)
         try:
+            stop_listening()
             BlockingQueueWorker.killWorkers()
             exit(0)
         except Exception as e:

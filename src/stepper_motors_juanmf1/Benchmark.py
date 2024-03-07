@@ -96,7 +96,7 @@ class Benchmark:
     """
     def findMinPPS(self, controller: BipolarStepperMotorDriver):
         picked = {'picked': False, 'pps': 0}
-        fn = lambda c, t, realDirection: self.keepMotorGoing(controller, c, t, picked)
+        fn = lambda c, t, realDirection, mpObserver: self.keepMotorGoing(controller, c, t, picked)
         controller.stepClockWise(10_000, fn=fn)
         while not picked['picked']:
 
@@ -111,7 +111,7 @@ class Benchmark:
 
     def keepMotorGoing(self, controller, currentPosition, targetPosition, picked):
         if not picked['picked'] and currentPosition % 1000 == 999:
-            fn = lambda c, t, realDirection: self.keepMotorGoing(controller, c, t, picked)
+            fn = lambda c, t, realDirection, mpObserver: self.keepMotorGoing(controller, c, t, picked)
             controller.stepClockWise(10_000, fn=fn)
 
     """
@@ -122,7 +122,8 @@ class Benchmark:
         tprint("SEARCHING FOR MAX PPS.")
         tprint("")
         picked = {'picked': False, 'pps': 0}
-        fn = lambda c, t, realDirection: self.keepMotorGoingUp(controller, c, controller.getCurrentPosition(), picked)
+        fn = lambda c, t, realDirection, mpObserver: (
+            self.keepMotorGoingUp(controller, c, controller.getCurrentPosition(), picked))
         controller.stepClockWise(10_000, fn=fn)
         flush_current_thread_only()
         listen_keyboard(
@@ -139,7 +140,7 @@ class Benchmark:
         if (not picked['picked']
                 and (currentPosition - lastChangedPosition) % int(controller.accelerationStrategy.currentPps / 2)
                 == 0):
-            fn = lambda c, t, realDirection: self.keepMotorGoingUp(controller, c, currentPosition, picked)
+            fn = lambda c, t, realDirection, mpObserver: self.keepMotorGoingUp(controller, c, currentPosition, picked)
             controller.accelerationStrategy.speedUp()
             controller.stepClockWise(10_000, fn=fn)
 
@@ -167,7 +168,7 @@ class Benchmark:
         tprint(f"speedBoosts: {speedBoosts}")
         tprint("")
         flush_current_thread_only()
-        controller.stepClockWise(10_000, fn=lambda c, t, d: self.keepMotorSpeedingUp(controller, c, t, speedBoosts))
+        controller.stepClockWise(10_000, fn=lambda c, t, d, o: self.keepMotorSpeedingUp(controller, c, t, speedBoosts))
 
         return speedBoosts
 
@@ -258,7 +259,7 @@ class Benchmark:
 
         self.stoppingMotor(True)
         controller.accelerationStrategy.willStop = True
-        controller.stepClockWise(5, fn=lambda a, b, c: self.resetStoppingFlag(a, b))
+        controller.stepClockWise(5, fn=lambda a, b, c, o: self.resetStoppingFlag(a, b))
         time.sleep(0.5)
         # Safety measure.
         self.stoppingMotor(False)
