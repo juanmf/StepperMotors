@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, Future
 
 import multiprocess as mp
 from multiprocess.queues import Queue
+from stepper_motors_juanmf1.MultiProcessShared import SharedManager
 
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, get_current_thread_info, flush_streams_if_not_empty, \
     flush_current_thread_only
@@ -65,7 +66,7 @@ class BlockingQueueWorker(UsesSingleThreadedExecutor):
     @staticmethod
     def setupJobCompletionObserver(isProxy, worker):
         if isProxy:
-            manager = Manager()
+            manager = SharedManager.getInstance().getManager()
             sharedMemory = manager.dict()
             return MultiprocessObserver(eventObserver=partial(BlockingQueueWorker.jobDoneReaderCallback, worker),
                                         eventPublisher=BlockingQueueWorker.jobDoneWriterCallback,

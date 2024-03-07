@@ -9,6 +9,7 @@ from multiprocessing import current_process
 
 from stepper_motors_juanmf1 import BlockingQueueWorker
 from stepper_motors_juanmf1.ControllerFactory import MultiProcessingControllerFactory
+from stepper_motors_juanmf1.MultiProcessShared import SharedManager
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_streams
 
 def terminateProcess(process):
@@ -27,6 +28,8 @@ def interrupt_handler(signum, frame):
         for process in multiprocessing.active_children():
             terminateProcess(process)
 
+        if SharedManager.instance:
+            SharedManager.getInstance().getManager().shutdown()
 
         process = current_process()
         # exit the process
@@ -38,8 +41,15 @@ def interrupt_handler(signum, frame):
         flush_streams()
         time.sleep(2)
     finally:
-        os.kill(os.getpid(), signal.SIGKILL)
-        exit(0)
+        # os.kill(os.getpid(), signal.SIGKILL)
+        try:
+            BlockingQueueWorker.killWorkers()
+            exit(0)
+        except Exception as e:
+            # Maybe interruptedException are raised.
+            print(e)
+            os.kill(os.getpid(), signal.SIGKILL)
+
 
 # Register the cleanup function using atexit
 atexit.register(interrupt_handler)

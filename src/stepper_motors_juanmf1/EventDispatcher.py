@@ -4,6 +4,7 @@ from multiprocess import Manager
 
 from stepper_motors_juanmf1.BlockingQueueWorker import BlockingQueueWorker, MultiprocessObserver
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint
+from stepper_motors_juanmf1.MultiProcessShared import SharedManager
 
 
 class EventDispatcher(BlockingQueueWorker):
@@ -28,7 +29,7 @@ class EventDispatcher(BlockingQueueWorker):
 
     def getMultiprocessObserver(self):
         if not self._multiprocessObserver:
-            self._mpManager = Manager()
+            self._mpManager = SharedManager.getInstance().getManager()
             eventInfo = self._mpManager.dict()
             eventInfo["eventName"] = ""
             eventInfo["eventInfo"] = ""
