@@ -121,7 +121,8 @@ class DynamicNavigation(Navigation):
         pulseCount = 0
         while not (controller.getCurrentPosition() == targetPosition and accelerationStrategy.canStop()):
             if interruptPredicate():
-                return
+                return Navigation.get_completed_future()
+
             pulseStart = time.monotonic_ns()
             self.pulseController(controller, pulseCount)
 

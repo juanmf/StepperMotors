@@ -4,8 +4,8 @@ import time
 import sys
 from sshkeyboard import listen_keyboard, stop_listening
 
-from stepper_motors_juanmf1.AccelerationStrategy import CustomAccelerationPerPps
-from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver
+from stepper_motors_juanmf1.AccelerationStrategy import CustomAccelerationPerPps, InteractiveAcceleration
+from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver, MotorDriver
 from stepper_motors_juanmf1.ControllerFactory import DynamicControllerFactory
 from stepper_motors_juanmf1.StepperMotor import GenericStepper
 from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_current_thread_only
@@ -50,10 +50,26 @@ class Benchmark:
         tprint("\n\n")
         tprint("Process has 4 steps, needs human feedback. Make sure you apply relevant load to the motor.")
         tprint("1) Find min PPS at which the motor show continuity between steps.")
+        tprint("            'up': speedUp"),
+        tprint("            'down': slowDown"),
+        tprint("            'enter': picks current Speed as MinPPS,"),
+
         tprint("2) Find max PPS motor acn keep up with, this by using modest acceleration so might be slow.")
+        tprint("            'up': invert speedDelts (Toggle sign). Once it stalled there is no use to this. Restart."),
+        tprint("            'down': invert speedDelts (Toggle sign); same as (up)"),
+        tprint("            'enter': Picks previous Speed as MaxPPS (before stalling, If pressed within half second "
+               "of failure)"),
+
         tprint("3) Starting from minPPS will try to jump to greatest next PPS that you observe not to fail with.")
+        tprint("            'y': Notify the system about successful Speed Boost"),
+        tprint("            'n': Notify the system about failed Speed Boost"),
+        tprint("            'r': Repeat Speed Boost"),
+        tprint("            'enter': Uses latest speed jump as new max jump from last (greatest) known valid PPS, "
+               "starts over, now using latest picked speed jump to find current max known valid PPS and test next max "
+               "speed jump"),
+
         tprint("4) after repeating 3 until maxPPS is reached, dump the data in a format compatible with "
-              "stepperMotors.CustomAccelerationPerPps.transformations")
+              "CustomAccelerationPerPps.transformations")
         tprint("\n\n")
 
         stop_listening()
@@ -132,7 +148,6 @@ class Benchmark:
             until='esc')
 
         maxPps = int(picked['pps'] - controller.accelerationStrategy.getSpeedDelta())
-        controller.accelerationStrategy.setMaxPpsForBench(maxPps)
         tprint(f"Max Speed: {maxPps} <<===")
         return maxPps
 
@@ -314,19 +329,18 @@ class Benchmark:
         method()
 
     @staticmethod
-    def initBenchmark(stepperMotor, directionGpioPin, stepGpioPin, *,
-                      sleepGpioPin=None,
+    @staticmethod
+    def initBenchmark(driver: BipolarStepperMotorDriver, *,
                       minPps=None,
-                      maxPps=None,
-                      minPpsDelta=None,
-                      absoluteMinPps=None):
-
-        minPpsDelta = minPpsDelta if minPpsDelta is not None else Benchmark.MIN_PPS_DELTA
-        absoluteMinPps = absoluteMinPps if absoluteMinPps is not None else Benchmark.ABSOLUTE_MIN_PPS
-        controllerFactory = DynamicControllerFactory()
-
-        driver = controllerFactory.getInteractiveDRV8825With(
-            stepperMotor, directionGpioPin, stepGpioPin, minPpsDelta, absoluteMinPps, sleepGpioPin=sleepGpioPin)
+                      maxPps=None):
+        """
+        Initializes Benchmark for provided motor/driver.
+        :param driver: Any available driver but MUST be set with InteractiveAcceleration
+        :param minPps: If provided, skips minPPS discovery
+        :param maxPps: If provided, skips maxPPS discovery
+        :return:
+        """
+        assert isinstance(driver.accelerationStrategy, InteractiveAcceleration)
 
         bench = Benchmark()
         # You can add your motor mi and max speed to skip their discovery phases.

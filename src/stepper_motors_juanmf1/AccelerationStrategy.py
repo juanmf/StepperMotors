@@ -365,9 +365,9 @@ class CustomAccelerationPerPps(AccelerationStrategy):
         :return: the new CustomAccelerationPerPps
         """
         out = CustomAccelerationPerPps(controller.stepperMotor,
-                                       controller.accelerationStrategy.delayPlanner,
-                                       speedBoosts,
-                                       controller.steppingModeMultiple)
+                                       delayPlanner=controller.accelerationStrategy.delayPlanner,
+                                       steppingModeMultiple=controller.steppingModeMultiple,
+                                       transformations=speedBoosts)
         out.done()
         # Removing reference to delayPlanner from original accelerationStrategy
         controller.accelerationStrategy.delayPlanner = None

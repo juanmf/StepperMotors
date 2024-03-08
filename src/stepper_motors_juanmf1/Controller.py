@@ -355,6 +355,8 @@ class BipolarStepperMotorDriver(MotorDriver):
                                    eventInAdvanceSteps=eventInAdvanceSteps, eventName=eventName)
         block.result()
         if self.navigation.isInterruptible() and self.isInterrupted():
+            # Navigation finished, but we don't deactivate coils, or declare not running. as momentum could be
+            # useful for interrupting job.
             return
 
         if not self.useHoldingTorque:

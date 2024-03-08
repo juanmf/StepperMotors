@@ -350,7 +350,7 @@ class ControllerFactory:
         pass
 
     def getBasicBuilder(self, stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin=None,
-                        stepsMode=None,
+                        stepsMode="Full",
                         modeGpioPins=None,
                         enableGpioPin=None,
                         syncNavigationMultitonKey=0) -> ControllerBuilder:
@@ -397,14 +397,22 @@ class ControllerFactory:
                 .withCustomTorqueCurveAccelerationAcceleration()
                 .buildDRV8825Driver())
 
-    def getInteractiveDRV8825With(self, stepperMotor, directionGpioPin, stepGpioPin, minSpeedDelta, minPps, sleepGpioPin=None,
+    def getInteractiveDriverBuilder(self, stepperMotor, directionGpioPin, stepGpioPin, minSpeedDelta, minPps,
+                                  sleepGpioPin=None,
                                   stepsMode="Full",
                                   modeGpioPins=None,
                                   enableGpioPin=None):
         return (self.getBasicBuilder(stepperMotor, directionGpioPin, stepGpioPin, sleepGpioPin, stepsMode, modeGpioPins,
                                      enableGpioPin)
-                .withInteractiveAcceleration(minSpeedDelta, minPps)
-                .buildDRV8825Driver())
+                .withInteractiveAcceleration(minSpeedDelta, minPps))
+
+    def getInteractiveDRV8825With(self, stepperMotor, directionGpioPin, stepGpioPin, minSpeedDelta, minPps, sleepGpioPin=None,
+                                  stepsMode="Full",
+                                  modeGpioPins=None,
+                                  enableGpioPin=None):
+        return (self.getInteractiveDriverBuilder(stepperMotor, directionGpioPin, stepGpioPin, minSpeedDelta, minPps,
+                                                 sleepGpioPin, stepsMode, modeGpioPins, enableGpioPin)
+                    .buildDRV8825Driver())
 
     def getFlatTCM2209With(self, stepperMotor, directionGpioPin, stepGpioPin,
                            stepsMode="1/8",

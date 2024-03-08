@@ -454,27 +454,6 @@ class ThreadPoolExecutorStackTraced(ThreadPoolExecutor):
             # traceback as
             # message
 
-
-def killWorkers():
-    """
-    kills all workers when program tears down.
-    """
-    workerPills = []
-    for worker in _WORKERS:
-        workerPills.append((worker, worker.workerFuture, worker.killWorker()))
-
-    index: int
-    for index, (worker, workerFuture, pill) in enumerate(workerPills):
-        try:
-            workerFuture.result(timeout=2)
-        except TimeoutError as e:
-            logging.error(f"Error: Worker {worker} didn't finish.")
-            raise e
-        if not pill.isSwallowed():
-            # Todo: in single process scenario this always prints for some or all workers. Why?
-            tprint(f"Worker died of other causes. {_WORKERS[index]}")
-
-
 class MpQueue(Queue):
     def __init__(self, maxsize=0, ignoreTaskDone=True):
         super().__init__(maxsize=maxsize, ctx=mp.get_context())
@@ -529,3 +508,24 @@ class MultiprocessObserver(BlockingQueueWorker):
             instance._eventPublisher(instance._sharedMemory, *args, **kwargs)
 
         instance.observedEvent.set()
+
+
+def killWorkers():
+    """
+    kills all workers when program tears down.
+    """
+    workerPills = []
+    for worker in _WORKERS:
+        workerPills.append((worker, worker.workerFuture, worker.killWorker()))
+
+    index: int
+    for index, (worker, workerFuture, pill) in enumerate(workerPills):
+        try:
+            workerFuture.result(timeout=2)
+        except TimeoutError as e:
+            logging.error(f"Error: Worker {worker} didn't finish.")
+            raise e
+        if not pill.isSwallowed():
+            # Todo: in single process scenario this always prints for some or all workers. Why?
+            tprint(f"Worker died of other causes. {_WORKERS[index]}")
+
