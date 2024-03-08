@@ -20,7 +20,7 @@ def terminateProcess(process):
     os.kill(process.pid, signal.SIGKILL)
 
 # Define a function to handle the interrupt signal (Ctrl+C)
-def interrupt_handler(signum=13, frame=None):
+def interrupt_handler(signum=signal.SIGINT, frame=None):
     tprint(f"Received signal {signum}. Cleaning up before exit.")
     try:
         for process, proxyController in MultiProcessingControllerFactory.runningProcesses:
@@ -48,9 +48,9 @@ def interrupt_handler(signum=13, frame=None):
             stop_listening()
             BlockingQueueWorker.killWorkers()
             exit(0)
-        except Exception as e:
-            # Maybe interruptedException are raised.
-            print(e)
+        except SystemExit as se:
+            # Print the exception, or handle it in any other appropriate way
+            print(f"SystemExit exception caught: {se}")
             os.kill(os.getpid(), signal.SIGKILL)
 
 
