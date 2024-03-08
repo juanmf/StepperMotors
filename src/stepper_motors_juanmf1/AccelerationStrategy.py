@@ -41,7 +41,7 @@ class AccelerationStrategy:
         delayPlanner.setAccelerationStrategy(self)
 
     def setMaxPPS(self, maxPps):
-        self.maxPps = maxPps / self.steppingModeMultiple
+        self.maxPps = int(maxPps / self.steppingModeMultiple)
         self.minSleepTimeUs = int(1_000_000 / self.maxPps)
 
     def getMaxPPS(self):
@@ -127,13 +127,13 @@ class LinearAcceleration(AccelerationStrategy):
     def decreaseSleepTime(self, targetSleepTime):
         nextTime = self.currentSleepTimeUs - self.sleepDeltaUs
         self.currentSleepTimeUs = nextTime if targetSleepTime < nextTime else targetSleepTime
-        self.currentPps = self.realDirection * (1_000_000 / self.currentSleepTimeUs)
+        self.currentPps = int(self.realDirection * (1_000_000 / self.currentSleepTimeUs))
 
     #
     def increaseSleepTime(self, targetSleepTime):
         nextTime = self.currentSleepTimeUs + self.sleepDeltaUs
         self.currentSleepTimeUs = nextTime if targetSleepTime > nextTime else targetSleepTime
-        self.currentPps = self.realDirection * (1_000_000 / self.currentSleepTimeUs)
+        self.currentPps = int(self.realDirection * (1_000_000 / self.currentSleepTimeUs))
 
     def shouldBreak(self, pendingSteps):
         return self.maxSleepTimeUs >= self.currentSleepTimeUs + (self.sleepDeltaUs * pendingSteps)
@@ -173,17 +173,17 @@ class ExponentialAcceleration(AccelerationStrategy):
         self.initialIncrementFactor = initialIncrementFactor
 
     def decreaseSleepTime(self, targetSleepTime):
-        nextPps = self.currentPps * self.initialIncrementFactor ** (1.01 - (abs(self.currentPps) / self.maxPps))
+        nextPps = int(self.currentPps * self.initialIncrementFactor ** (1.01 - (abs(self.currentPps) / self.maxPps)))
         if abs(nextPps) > self.maxPps:
-            nextPps = sign(self.currentPps) * self.maxPps
+            nextPps = int(sign(self.currentPps) * self.maxPps)
 
         self.currentPps = nextPps
         self.currentSleepTimeUs = 1_000_000 / nextPps
 
     def increaseSleepTime(self, targetSleepTime):
-        nextPps = self.currentPps / self.initialIncrementFactor ** (1.01 - (abs(self.currentPps) / self.maxPps))
+        nextPps = int(self.currentPps / self.initialIncrementFactor ** (1.01 - (abs(self.currentPps) / self.maxPps)))
         if abs(nextPps) < self.minPps:
-            nextPps = sign(self.currentPps) * self.minPps
+            nextPps = int(sign(self.currentPps) * self.minPps)
 
         self.currentPps = nextPps
         self.currentSleepTimeUs = 1_000_000 / nextPps
@@ -404,19 +404,19 @@ class InteractiveAcceleration(AccelerationStrategy):
         nextPps = abs(self.currentPps) + self.speedDelta
         nextTime = 1_000_000 / nextPps
         self.currentSleepTimeUs = nextTime if targetSleepTime < nextTime else targetSleepTime
-        self.currentPps = self.realDirection * 1_000_000 / self.currentSleepTimeUs
+        self.currentPps = int(self.realDirection * 1_000_000 / self.currentSleepTimeUs)
 
     def increaseSleepTime(self, targetSleepTime):
         nextPps = abs(self.currentPps) - self.speedDelta
         nextTime = 1_000_000 / nextPps
         self.currentSleepTimeUs = nextTime if targetSleepTime > nextTime else targetSleepTime
-        self.currentPps = self.realDirection * 1_000_000 / self.currentSleepTimeUs
+        self.currentPps = int(self.realDirection * 1_000_000 / self.currentSleepTimeUs)
 
     def setSpeedDelta(self, speedDelta, overrideLastSpeed=False):
         self.lastSpeedDelta = self.speedDelta \
                               if not overrideLastSpeed \
                               else overrideLastSpeed / self.steppingModeMultiple
-        self.speedDelta = speedDelta / self.steppingModeMultiple
+        self.speedDelta = int(speedDelta / self.steppingModeMultiple)
 
     def getSpeedDelta(self):
         return self.speedDelta
@@ -425,12 +425,12 @@ class InteractiveAcceleration(AccelerationStrategy):
         self.setSpeedDelta(-self.speedDelta)
 
     def setMinPps(self, minPPS):
-        minPPS = minPPS / self.steppingModeMultiple
+        minPPS = int(minPPS / self.steppingModeMultiple)
         self.maxSleepTimeUs = 1_000_000 / minPPS
         self.minPps = minPPS
 
     def setMaxPps(self, maxPPS):
-        self.maxPps = maxPPS / self.steppingModeMultiple
+        self.maxPps = int(maxPPS / self.steppingModeMultiple)
         self.minSleepTimeSeconds = 1 / self.maxPps
         self.minSleepTimeUs = 1_000_000 / self.maxPps
 

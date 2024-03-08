@@ -1,14 +1,15 @@
+import sys
+import os
+import signal
 import threading
 import time
 
-import sys
 from sshkeyboard import listen_keyboard, stop_listening
 
 from stepper_motors_juanmf1.AccelerationStrategy import CustomAccelerationPerPps, InteractiveAcceleration
-from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver, MotorDriver
-from stepper_motors_juanmf1.ControllerFactory import DynamicControllerFactory
+from stepper_motors_juanmf1.Controller import BipolarStepperMotorDriver
 from stepper_motors_juanmf1.StepperMotor import GenericStepper
-from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_current_thread_only
+from stepper_motors_juanmf1.ThreadOrderedPrint import tprint, flush_current_thread_only, flush_streams
 
 
 class Benchmark:
@@ -80,19 +81,23 @@ class Benchmark:
 
         maxPps = self.findMaxPPS(controller) if maxPps is None else maxPps
         stop_listening()
-        flush_current_thread_only()
+        flush_streams()
         self.maxPpsFound = maxPps
 
-        speedBoosts = self.findTransformations(controller, minPps, maxPps)
+        tprint(f"Using controller={controller} to find max instantaneous acceleration.")
+        self.findTransformations(controller, minPps, maxPps)
         listen_keyboard(
-            on_press=lambda k: self.findMaxDeltaPerPPSControls(k, controller, speedBoosts),
+            on_press=lambda k: self.findMaxDeltaPerPPSControls(k, controller),
             sequential=True,
             until='esc')
+        speedBoosts = controller.accelerationStrategy.transformations
+
         self.printResults(minPps, maxPps, speedBoosts)
         return speedBoosts
 
     @staticmethod
     def printResults(minPps, maxPps, speedBoosts):
+        flush_streams()
         tprint(f""
               f"Results"
               f"===========================================================================")
@@ -153,10 +158,11 @@ class Benchmark:
 
     def keepMotorGoingUp(self, controller, currentPosition, lastChangedPosition, picked):
         if (not picked['picked']
-                and (currentPosition - lastChangedPosition) % int(controller.accelerationStrategy.currentPps / 2)
-                == 0):
+                # Should fall around 1/2 second between speed updates.
+                and (currentPosition - lastChangedPosition) % int(controller.accelerationStrategy.currentPps / 2) == 0):
             fn = lambda c, t, realDirection, mpObserver: self.keepMotorGoingUp(controller, c, currentPosition, picked)
             controller.accelerationStrategy.speedUp()
+            print(controller.accelerationStrategy.currentPps)
             controller.stepClockWise(10_000, fn=fn)
 
     """
@@ -166,11 +172,13 @@ class Benchmark:
     def findTransformations(self, controller, minPps, maxPps, speedBoosts=None):
         tprint("")
         tprint("FINDING SPEED BOOSTS FOR MOTOR.")
+        tprint(f"minPps={minPps}, maxPps={maxPps}, speedBoosts={speedBoosts}")
         tprint("")
         # Stop
         self.stopMotor(controller)
 
         if speedBoosts is None:
+            tprint("Init SpeedBoosts Array")
             minPps = int(minPps)
             speedBoosts = [(minPps, self.minSpeedDelta)]
             controller.accelerationStrategy = CustomAccelerationPerPps.constructFrom(controller, speedBoosts)
@@ -190,7 +198,7 @@ class Benchmark:
     def keepMotorSpeedingUp(self, controller, currentPosition, targetPosition, speedBoosts):
         if self.stoppingMotor() or self.speedDeltasSearchEnded:
             return
-
+        # tprint(f"currentPps: {controller.accelerationStrategy.currentPps}; maxPps: {controller.accelerationStrategy.maxPps}")
         if controller.accelerationStrategy.currentPps >= self.maxPpsFound:
             tprint(f"Ending the Search. max speed reached. "
                   f"currentPps: {controller.accelerationStrategy.currentPps}; maxPps: {controller.accelerationStrategy.maxPps}"
@@ -198,46 +206,51 @@ class Benchmark:
             self.speedDeltasSearchEnded = True
             lastBoost = controller.accelerationStrategy.transformations[-1]
             controller.accelerationStrategy.setSpeedDelta(self.maxPpsFound - lastBoost[0])
-            self.forcePickSpeedBoost(controller, speedBoosts, continueLooping=False)
+            self.forcePickSpeedBoost(controller, continueLooping=False)
             self.stopMotor(controller)
             stop_listening()
 
-    def passedSpeedBoost(self, controller, speedBoosts):
+    def passedSpeedBoost(self, controller):
+        speedBoosts = controller.accelerationStrategy.transformations
         tprint(f"PASSED speed boost: cPPs: {controller.accelerationStrategy.currentPps} last Speed: {speedBoosts[-1][0]}")
-        tprint("Restarting cycle.")
         if self.findSpeedJumpUpperLimit is None:
             controller.accelerationStrategy.doubleSpeedDelta()
             controller.accelerationStrategy.inferMaxPps()
-            tprint(f"Doubling Delta: new delta: {controller.accelerationStrategy.getSpeedDelta()}")
         else:
             deltaDelta = (self.findSpeedJumpUpperLimit - controller.accelerationStrategy.getSpeedDelta()) / 2
             delta = round(controller.accelerationStrategy.getSpeedDelta() + deltaDelta)
-            tprint(f"New Delta: {delta}")
             if deltaDelta >= self.minSpeedDelta:
                 controller.accelerationStrategy.setSpeedDelta(delta)
             else:
                 self.forcePickSpeedBoost(controller, speedBoosts)
                 return
-        self.findTransformations(
-            controller, controller.accelerationStrategy.minPps, controller.accelerationStrategy.maxPps, speedBoosts)
+        tprint(f"DeltaLimit == newDelta: {controller.accelerationStrategy.getSpeedDelta()}; "
+               f"prevDelta: {controller.accelerationStrategy.lastSpeedDelta}")
 
-    def failedSpeedBoost(self, controller, speedBoosts):
+        tprint("Restarting cycle.")
+        self.findTransformations(
+            controller, controller.accelerationStrategy.minPps, controller.accelerationStrategy.maxPps,
+            speedBoosts=speedBoosts)
+
+    def failedSpeedBoost(self, controller):
+        speedBoosts = controller.accelerationStrategy.transformations
         tprint(f"FAILED speed boost: cPPs: {controller.accelerationStrategy.currentPps} last Speed: {speedBoosts[-1][0]}")
         tprint("Restarting cycle.")
         lastHealthySpeedDelta = controller.accelerationStrategy.lastSpeedDelta
         self.findSpeedJumpUpperLimit = controller.accelerationStrategy.getSpeedDelta()
         delta = round(lastHealthySpeedDelta + (self.findSpeedJumpUpperLimit - lastHealthySpeedDelta) / 2)
-        tprint(f"new Limit: {self.findSpeedJumpUpperLimit}; newDelta: {delta}; prevDelta: {lastHealthySpeedDelta}")
+        tprint(f"new DeltaLimit: {self.findSpeedJumpUpperLimit}; newDelta: {delta}; prevDelta: {lastHealthySpeedDelta}")
         controller.accelerationStrategy.setSpeedDelta(delta, lastHealthySpeedDelta)
 
         self.findTransformations(
             controller, controller.accelerationStrategy.minPps, controller.accelerationStrategy.maxPps, speedBoosts)
 
-    def repeatSpeedBoost(self, controller, speedBoosts):
+    def repeatSpeedBoost(self, controller):
+        speedBoosts = controller.accelerationStrategy.transformations
         self.findTransformations(
             controller, controller.accelerationStrategy.minPps, controller.accelerationStrategy.maxPps, speedBoosts)
 
-    def forcePickSpeedBoost(self, controller, speedBoosts, continueLooping=True):
+    def forcePickSpeedBoost(self, controller, continueLooping=True):
         # Done
         self.findSpeedJumpUpperLimit = None
         tprint("")
@@ -245,7 +258,7 @@ class Benchmark:
         boost = round(controller.accelerationStrategy.getSpeedDelta())
         controller.accelerationStrategy.resetMaxPps()
         if not self.speedDeltasSearchEnded:
-            controller.accelerationStrategy.setSpeedDelta(self.minSpeedDelta, self.minSpeedDelta)
+            controller.accelerationStrategy.setSpeedDelta(self.minSpeedDelta, overrideLastSpeed=self.minSpeedDelta)
         speedBoosts = controller.accelerationStrategy.transformations
         tprint(f"Found next speed boost of {boost}, for pps {speedBoosts[-2][0]}")
         tprint(f"speedBoosts: {speedBoosts}")
@@ -286,9 +299,8 @@ class Benchmark:
             self.isStoppingMotor = value
 
     def resetStoppingFlag(self, currentPosition, targetPosition):
-        tprint(f"resetStoppingFlag: currentPosition: {currentPosition}, targetPosition: {targetPosition}")
         if currentPosition == targetPosition:
-            tprint("Successfully stopped motor.")
+            tprint(f"resetStoppingFlag: currentPosition: {currentPosition}, targetPosition: {targetPosition}")
             tprint("Successfully stopped motor.")
             tprint("")
             self.stoppingMotor(False)
@@ -310,6 +322,7 @@ class Benchmark:
     @staticmethod
     def findMaxSpeedControls(key, controller, picked):
         hotKeys = {
+            # Kind of useless once it stalled.
             'up': lambda: controller.accelerationStrategy.reverseSpeedDelta(),
             'down': lambda: controller.accelerationStrategy.reverseSpeedDelta(),
             'enter': picked,
@@ -317,16 +330,17 @@ class Benchmark:
         method = hotKeys.get(key, lambda: False)
         method()
 
-    def findMaxDeltaPerPPSControls(self, key, controller, speedBoosts):
+    def findMaxDeltaPerPPSControls(self, key, controller):
         hotKeys = {
-            'y': lambda: self.passedSpeedBoost(controller, speedBoosts),
-            'enter': lambda: self.forcePickSpeedBoost(controller, speedBoosts),
-            'n': lambda: self.failedSpeedBoost(controller, speedBoosts),
-            'r': lambda: self.repeatSpeedBoost(controller, speedBoosts),
+            'y': self.passedSpeedBoost,
+            'n': self.failedSpeedBoost,
+            'r': self.repeatSpeedBoost,
+            'enter': self.forcePickSpeedBoost,
             # Todo: 'u': lambda: self.undoSpeedBoost(controller, speedBoosts),
         }
-        method = hotKeys.get(key, lambda: False)
-        method()
+        tprint(f"Pressed {key}")
+        method = hotKeys.get(key, lambda _controller, _speedBoosts: False)
+        method(controller)
 
     @staticmethod
     @staticmethod
@@ -347,6 +361,8 @@ class Benchmark:
         bench.benchmarkMotor(driver, minPps, maxPps)
         driver.killWorker()
         driver.executor.shutdown(wait=False, cancel_futures=True)
+        # Send SIGTERM signal to self
+        os.kill(os.getpid(), signal.SIGTERM)
 
     @classmethod
     def main(cls):
