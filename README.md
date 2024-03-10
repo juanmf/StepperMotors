@@ -93,12 +93,12 @@ All motors driven by dedicated DRV8825.
 
 If everything works fine (on my RPI this method gets stuck.)
 
-`pip install -i https://test.pypi.org/simple/ stepper-motors-juanmf1`
+`pip install -i https://pypi.org/simple/ stepper-motors-juanmf1`
 
 
 ### Manually
 
-Manually (find latest link at https://test.pypi.org/project/stepper-motors-juanmf1/#files copy link for 
+Manually (find latest link at https://pypi.org/project/stepper-motors-juanmf1/#files copy link for 
 stepper_motors_juanmf1-<latest version>-py3-none-any.whl).
 Example with stepper_motors_juanmf1-0.0.2-py3-none-any.whl:
 ```commandline
@@ -783,7 +783,7 @@ Uploading stepper_motors_juanmf1-0.0.15.tar.gz
 100% ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 345.2/345.2 kB • 00:00 • 78.0 MB/s
 
 # then reinstall on RPI:
-$ pip install --upgrade -i https://test.pypi.org/simple/ stepper-motors-juanmf1
+$ pip install --upgrade -i https://pypi.org/simple/ stepper-motors-juanmf1
 
 # Alternatively can install on RPI directly from whl package, to test before uploading to Index.
 $ pip install --upgrade ./dist/stepper_motors_juanmf1-<latest>-py3-none-any.whl
