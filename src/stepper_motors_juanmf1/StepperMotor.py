@@ -106,7 +106,7 @@ class PG35S_D48_HHC2(StepperMotor):
     # TORQUE_CURVE = [(180.0, 320), (500.0, 240), (740.0, 205), (945.0, 0)]
     # TORQUE_CURVE = [(200, 150), (350, 200), (550, 100), (650, 100), (750, 80), (830, 20), (850, 0)]
     # TORQUE_CURVE = [(200, 100), (300, 150), (450, 100), (550, 0)]
-    TORQUE_CURVE = [(200, 150), (350, 0)]
+    TORQUE_CURVE = [(150, 160), (310, 160), (470, 20), (490, 0)]
 
     """
     Steps per Revolution with 1.8 deg per step
