@@ -51,7 +51,7 @@ def flush_streams_if_not_empty():
         flush_streams()
 
 
-def flush_streams(toPrint=None):
+def flush_streams(toPrint=None, stoppingApp=False):
     global _printStreams
     localPrintItems = _printStreams if toPrint is None else toPrint
 
@@ -68,7 +68,10 @@ def flush_streams(toPrint=None):
                 + "Thread prints Dump Complete =======================================================\n")
 
     try:
-        logging.info(out)
+        if not stoppingApp:
+            logging.info(out)
+        else:
+            os.write(sys.stdout.fileno(), out.encode())
     except RuntimeError as e:
         print(f"Logging error {e, traceback.format_exc()}")
     finally:

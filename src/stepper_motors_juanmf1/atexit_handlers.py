@@ -39,7 +39,7 @@ def interrupt_handler(signum=signal.SIGINT, frame=None):
             process.terminate()
 
         GPIO.cleanup()
-        flush_streams()
+        flush_streams(stoppingApp=True)
         stop_listening()
         time.sleep(2)
     finally:
