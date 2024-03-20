@@ -928,6 +928,7 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
             """
             # Removing Singletons instances in case its state was cloned from Parent Process:
             EventDispatcher._instance = None
+            self.eventDispatcher = EventDispatcher.instance(self.multiprocessObserver)
             BasicSynchronizedNavigation._instances = {}
             BasicSynchronizedNavigation.getInstance(countDownLatch=syncNavigationCountDownLatch)
             DynamicDelayPlanner.Rest._instance = None
@@ -935,7 +936,6 @@ class MultiProcessingControllerFactory(SynchronizedControllerFactory):
             DynamicDelayPlanner.RampingUp._instance = None
             DynamicDelayPlanner.RampingDown._instance = None
 
-            self.eventDispatcher = EventDispatcher.instance(self.multiprocessObserver)
             tprint("Unpacker: Instantiating EventDispatcher with shared memory", self.multiprocessObserver,
                    self.eventDispatcher, self.eventDispatcher._multiprocessObserver,
                    self.eventDispatcher._shouldDispatchToParentProcess, jobCompletionObservers)
