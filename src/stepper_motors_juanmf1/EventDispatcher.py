@@ -20,6 +20,7 @@ class EventDispatcher(BlockingQueueWorker):
     def __init__(self, multiprocessObserver=None):
         assert EventDispatcher._instance is None
         super().__init__(self._dispatchMainLoop, jobQueueMaxSize=self.MAX_EVENTS, workerName="EventDispatcher_")
+        tprint(f"ED.__init__ > multiprocessObserver {multiprocessObserver}")
         self.events = {}
         self.markForUnregister = []
         self._mpManager: Manager = None
