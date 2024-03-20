@@ -12,9 +12,9 @@ class EventDispatcher(BlockingQueueWorker):
     _instance = None
 
     @staticmethod
-    def instance(*args, **kwargs):
+    def instance(multiprocessObserver=None):
         if not EventDispatcher._instance:
-            EventDispatcher._instance = EventDispatcher(*args, **kwargs)
+            EventDispatcher._instance = EventDispatcher(multiprocessObserver)
         return EventDispatcher._instance
 
     def __init__(self, multiprocessObserver=None):
