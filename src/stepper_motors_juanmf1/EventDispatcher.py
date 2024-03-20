@@ -73,6 +73,7 @@ class EventDispatcher(BlockingQueueWorker):
 
     def publishMainLoop(self, eventName, eventInfo=None):
         self.work([eventName, eventInfo], block=False)
+        tprint(f"self._shouldDispatchToParentProcess {self._shouldDispatchToParentProcess}")
         if self._shouldDispatchToParentProcess:
             MultiprocessObserver.eventPublisher(self._multiprocessObserver, eventName, eventInfo)
 
@@ -99,9 +100,11 @@ class EventDispatcher(BlockingQueueWorker):
         eName, eInfo = sharedMemory["eventName"], sharedMemory["eventInfo"]
         sharedMemory["eventName"] = ""
         sharedMemory["eventInfo"] = ""
+        tprint(f"Fwding Event details IN parent: {eName}")
         self.publishMainLoop(eName, eInfo)
 
     @staticmethod
     def multiProcessPublish(sharedMemory, eventName, eventInfo):
+        tprint(f"writing Event details for parent: {eventName}")
         sharedMemory["eventName"] = eventName
         sharedMemory["eventInfo"] = eventInfo
