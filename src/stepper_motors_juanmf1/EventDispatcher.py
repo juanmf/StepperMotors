@@ -84,7 +84,7 @@ class EventDispatcher(BlockingQueueWorker):
             #   optional.
             tprint(f"Missed event {eventName}")
             return
-
+        tprint(f"eventName {eventName}")
         for calleeId, callee in self.events.get(eventName, {}).items():
             callee.__call__(calleeId, {**eventInfo, **{'eventName': eventName}})
 
